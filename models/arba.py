@@ -67,7 +67,7 @@ class ArchivoComprimido(models.Model):
                     ruta = os.path.join(base_dir, name)
                     if 'Per' in name:
                         if os.path.isfile(ruta):
-                            #rec._procesar_txt_a_padron_perc(ruta)
+                            rec._procesar_txt_a_padron_perc(ruta)
                             self._log_chatter(f"Archivos zip descomprimido exitosamente. {archivos}")
 
 
