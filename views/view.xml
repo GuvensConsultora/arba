@@ -5,6 +5,17 @@
     <field name="model">arba.archivo_comprimido</field>
     <field name="arch" type="xml">
       <form string="Archivo Comprimido">
+	<button name="action_procesar_zip"
+		      string="Procesar ZIP"
+		      type="object"
+		class="btn-primary"/>
+	<button name="action_eliminar_percepciones"
+		string="Eliminar percepciones"
+		type="object"
+		class="btn-danger"
+		confirm="¿Estás seguro que deseas eliminar todas las percepciones? Esta acción no se puede deshacer."/>
+
+
         <sheet>
           <group>
             <field name="name"/>

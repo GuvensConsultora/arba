@@ -146,7 +146,7 @@ class ArchivoComprimido(models.Model):
 
     def action_procesar_zip(self):
         for rec in self:
-            rec._procesar_txt_a_padron_perc()
+            rec._procesar_txt_a_padron_perc(/tmp/arba_padron/)
 
 
 
