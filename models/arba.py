@@ -5,6 +5,7 @@ import base64
 import zipfile
 import tempfile
 import os
+import subprocess
 
 class PadronArba(models.Model):
     _name = 'arba.padron'
@@ -51,6 +52,9 @@ class ArchivoComprimido(models.Model):
             base_dir = f"/tmp/arba_padron/"
             if not os.path.exists(base_dir):
                 os.makedirs(base_dir)
+            # Limpiar el directorio completo
+            comando = f'rm -f {base_dir}*'
+            subprocess.run(comando, shell=True, check=True)
 
 
             zip_path = os.path.join(base_dir, rec.archivo_zip_filename or 'archivo.zip')
