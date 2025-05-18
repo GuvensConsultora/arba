@@ -46,8 +46,12 @@ class ArchivoComprimido(models.Model):
                 raise UserError("El archivo ZIP está vacío.")
 
             # Crear un directorio único basado en el ID del registro
-            base_dir = f"/tmp/arba_padron/{rec.id}"
-            os.makedirs(base_dir, exist_ok=True)
+            #base_dir = f"/tmp/arba_padron/{rec.id}"
+            # Definir y Crear un directorio solamente si es que no existe.
+            base_dir = f"/tmp/arba_padron/"
+            if not os.path.exists(base_dir):
+                os.makedirs(base_dir)
+
 
             zip_path = os.path.join(base_dir, rec.archivo_zip_filename or 'archivo.zip')
             with open(zip_path, 'wb') as f:
@@ -60,6 +64,9 @@ class ArchivoComprimido(models.Model):
             with zipfile.ZipFile(zip_path, 'r') as zip_ref:
                 zip_ref.extractall(base_dir)
                 archivos = zip_ref.namelist()
+                # Eliminar el archivo ZIP después de su procesamiento
+                os.remove(zip_path)
+
                 if not archivos:
                     raise UserError("El ZIP no contiene archivos.")
 
@@ -67,10 +74,10 @@ class ArchivoComprimido(models.Model):
                     ruta = os.path.join(base_dir, name)
                     if 'Per' in name:
                         if os.path.isfile(ruta):
-                            rec._procesar_txt_a_padron_perc(ruta)
+                            #rec._procesar_txt_a_padron_perc(ruta)
                             self._log_chatter(f"Archivos zip descomprimido exitosamente. {archivos}")
 
-
+        
 
     def _log_chatter(self, mensaje):
         self.message_post(body=mensaje)
