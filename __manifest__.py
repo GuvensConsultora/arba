@@ -10,7 +10,7 @@
         'security/ir.model.access.csv',
         'views/view.xml',
         'views/padron_arba_view.xml',
-
+        'data/padron.xml',
     ],
     'assets': {
         'web.assets_frontend': [

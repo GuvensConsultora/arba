@@ -81,28 +81,32 @@ class ArchivoComprimido(models.Model):
                             #rec._procesar_txt_a_padron_perc(ruta)
                             self._log_chatter(f"Archivos zip descomprimido exitosamente. {archivos}")
 
-        
-
     def _log_chatter(self, mensaje):
-        self.message_post(body=mensaje)
+        #self.message_post(body=mensaje)
+        pass
+    
 
+    def _procesar_txt_a_padron_perc(self):
+        path = 'tmp/arba_padron/'
 
-    def _procesar_txt_a_padron_perc(self, path):
-        self._log_chatter(f"📂 Iniciando procesamiento del archivo: {os.path.basename(path)}")
-        if not os.path.exists(path):
-            raise UserError(f"No se encontró el archivo: {path}")
-
+        for name in os.listdir(path):
+            if 'Per' in name:  #busco el archivo de percepciones.
+                ruta = os.path.join(path, name) #termino de armar la ruta al archivo
+                if os.path.isfile(ruta): # Compruebo si es un archivo.
+                    pass
+                else:
+                    break
+                    
         # Contar líneas no vacías
-        with open(path, 'r', encoding='latin1') as contar:
-            total_lineas = sum(1 for linea in contar if linea.strip())
-            self._log_chatter(f"📄 El archivo contiene {total_lineas} líneas para procesar.")
+        #with open(path, 'r', encoding='latin1') as contar:
+        #    _chatter(f"📄 El archivo contiene {total_lineas} líneas para procesar.")
 
         batch_data = []
         total_insertados = 0
         fields = ['cuit', 'par_uno', 'par_dos', 'par_tres', 'tasa', 'codigo', 'inicio', 'fin', 'name']
 
         try:
-            with open(path, 'r', encoding='latin1') as f:
+            with open(ruta, 'r', encoding='latin1') as f:
                 for i, linea in enumerate(f, start=1):
                     cols = linea.strip().split(';')
                     if len(cols) < 10:
@@ -175,3 +179,8 @@ class ArchivoComprimido(models.Model):
             self.env.cr.commit()  # liberar memoria entre lotes
 
         self._log_chatter(f"🗑️ Se eliminaron {total} registros del modelo 'arba.padron'.")
+
+
+    def my_scheduled_action(self):
+        #_logger.info(f"Ejectuamos cron para procesar percepciones ARBA")
+        self._procesar_txt_a_padron_perc()
