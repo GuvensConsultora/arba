@@ -1,0 +1,35 @@
+from odoo import api, SUPERUSER_ID
+
+def crear_cron_impuesto_arba(cr, registry):
+    env = api.Environment(cr, SUPERUSER_ID, {})
+
+    modelo = 'arba.archivo_comprimido'
+    metodo = 'crear_impuestos_faltantes_por_tasa'
+    xml_id = 'arba.cron_crear_impuestos_por_tasa'
+
+    existing = env.ref(xml_id, raise_if_not_found=False)
+
+    vals = {
+        'name': 'Crear Impuestos por Tasa ARBA',
+        'model_id': env['ir.model']._get_id(modelo),
+        'state': 'code',
+        'code': f"env['{modelo}'].search([]).{metodo}()",
+        'interval_number': 1,
+        'interval_type': 'months',
+        'numbercall': -1,
+        'doall': False,
+        'active': True,
+        'user_id': SUPERUSER_ID,
+    }
+
+    if existing:
+        existing.write(vals)
+    else:
+        cron = env['ir.cron'].create(vals)
+        env['ir.model.data'].create({
+            'name': 'cron_crear_impuestos_por_tasa',
+            'model': 'ir.cron',
+            'module': 'arba',
+            'res_id': cron.id,
+            'noupdate': True,
+        })

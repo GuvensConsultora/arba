@@ -175,8 +175,5 @@ class ArchivoComprimido(models.Model):
             self.message_post(body=mensaje)
             _logger.error(mensaje)
 
-
-
-
         
         # Aquí seguirían otras funciones del modelo...

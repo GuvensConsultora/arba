@@ -1,0 +1,187 @@
+from odoo import models, fields, api
+from odoo.exceptions import UserError
+from datetime import datetime, timedelta
+import base64
+import zipfile
+import os
+import subprocess
+
+class PadronArba(models.Model):
+    _name = 'arba.padron'
+    _description = 'Contiene la base de datos del padron de Arba'
+
+    name = fields.Char(string="Periodo")
+    inicio = fields.Date(string="Fecha Inicio")
+    fin = fields.Date(string="Fecha Final")
+    cuit = fields.Char(string="Cuit")
+    par_uno = fields.Char(string="Uno")
+    par_dos = fields.Char(string="Dos")
+    par_tres = fields.Char(string="Tres")
+    tasa = fields.Float(string="Tasa")
+    codigo = fields.Char(string="Codigo")
+
+class ArchivoComprimido(models.Model):
+    _name = 'arba.archivo_comprimido'
+    _inherit = ['mail.thread'] # Habilito el bloque de mensajes.
+    _description = 'Archivo Comprimido'
+
+    name = fields.Char(string="Nombre")
+    archivo_zip = fields.Binary(string="Archivo Zip", required=True)
+    archivo_zip_filename = fields.Char(string="Nombre del Archivo")
+
+    @api.model
+    def create(self, vals):
+        record = super().create(vals)
+        record._procesar_zip_en_directorio()
+        return record
+
+
+    def _procesar_txt_a_padron_perc(self, ruta):
+        """
+        Procesa un archivo .txt del padrón de percepciones ARBA y lo inserta en la tabla arba.padron.
+        """
+        _logger.info(f"Procesando archivo TXT: {ruta}")
+
+        fields = [
+            'cuit', 'periodo', 'jurisdiccion', 'agente', 'tipo_registro',
+            'fecha_pago', 'importe', 'alicuota', 'numero_comprobante',
+            'tipo_comprobante', 'numero_documento'
+        ]
+
+        batch_data = []
+        total_insertados = 0
+
+        # Contar líneas no vacías
+        with open(ruta, 'r', encoding='latin1') as f:
+            total_lineas = sum(1 for linea in f if linea.strip())
+        _logger.info(f"📄 El archivo tiene {total_lineas} líneas de datos válidas.")
+
+        # Procesar archivo
+        with open(ruta, 'r', encoding='latin1') as f:
+            for i, linea in enumerate(f, start=1):
+                linea = linea.strip()
+                if not linea:
+                    continue
+
+                try:
+                    cuit = linea[0:11].strip()
+                    periodo = linea[11:17].strip()
+                    jurisdiccion = linea[17:19].strip()
+                    agente = linea[19:30].strip()
+                    tipo_registro = linea[30:32].strip()
+                    fecha_pago = linea[32:40].strip()
+                    importe = float(linea[40:55].strip()) / 100
+                    alicuota = float(linea[55:59].strip()) / 100
+                    numero_comprobante = linea[59:71].strip()
+                    tipo_comprobante = linea[71:73].strip()
+                    numero_documento = linea[73:81].strip()
+
+                    datos = (
+                        cuit, periodo, jurisdiccion, agente, tipo_registro,
+                        fecha_pago, importe, alicuota, numero_comprobante,
+                        tipo_comprobante, numero_documento
+                    )
+
+                    batch_data.append(datos)
+
+                    if len(batch_data) >= 1000:
+                        self.env['arba.padron'].load(fields, batch_data)
+                        total_insertados += len(batch_data)
+                        batch_data = []
+                        self.env.cr.commit()
+                        self._log_chatter(f"✅ Insertado lote parcial. Total acumulado: {total_insertados}")
+
+                    # Cortar si alcanzamos el total de líneas válidas
+                    if total_insertados >= total_lineas:
+                        break
+
+                except Exception as e:
+                    _logger.error(f"Error procesando línea {i}: {e}")
+
+            # Insertar lo que quede
+            if batch_data and total_insertados < total_lineas:
+                self.env['arba.padron'].load(fields, batch_data)
+                total_insertados += len(batch_data)
+                self.env.cr.commit()
+                self._log_chatter(f"✅ Último lote insertado: {len(batch_data)} registros.")
+
+        _logger.info(f"🎯 Proceso finalizado. Total insertado: {total_insertados} registros.")
+
+    def _log_chatter(self, mensaje):
+        self.message_post(body=mensaje)
+        #pass
+
+            
+    def action_procesar_zip(self):
+        for rec in self:
+            rec._procesar_txt_a_padron_perc()
+
+
+
+    def _enviar_mensaje_directo(self, mensaje, user_ids):
+        """
+        Envía un mensaje a través de la bandeja de entrada (conversaciones) a usuarios específicos.
+        """
+        channel = self.env['mail.channel'].create({
+            'name': 'Notificación ARBA',
+            'channel_partner_ids': [(4, user.partner_id.id) for user in self.env['res.users'].browse(user_ids)],
+            'channel_type': 'chat',
+        })
+
+        channel.message_post(
+            body=mensaje,
+            message_type='comment',
+            subtype_xmlid='mail.mt_comment',
+        )
+
+
+    def action_eliminar_percepciones(self):
+        self.env.cr.execute("TRUNCATE TABLE arba_padron")
+        #self._enviar_mensaje_directo(mensaje="🗑️ Se eliminaron los registros del padron ARBA.",
+        #       user_ids=[1, 2])  # IDs de usuarios destinatarios)
+
+        #Buscar y desactivar el cron que llama a este método
+        #cron = self.env.ref('arba.ir_eliminar_percepciones', raise_if_not_found=False)
+        #if cron:
+        #    cron.write({'active': False})
+  
+
+
+    def crear_o_actualizar_cron_unico(self, xml_id, nombre_funcion_modelo, modelo):
+        """
+        Crea o actualiza una acción planificada para que se ejecute una vez en los próximos 5 minutos.
+        - xml_id: string con el ID externo del cron (por ejemplo: 'arba.ejecutar_una_vez')
+        - nombre_funcion_modelo: string con el nombre de la función que se quiere ejecutar
+        - modelo: string con el nombre técnico del modelo (por ejemplo: 'arba.archivo_comprimido')
+        """
+
+        # Calcula fecha actual + 5 minutos
+        fecha_ejecucion = datetime.now() + timedelta(minutes=2)
+
+        # Intentar obtener el cron
+        cron = self.env.ref(xml_id, raise_if_not_found=False)
+
+        if cron:
+            # Solo actualizar la fecha de ejecución y asegurarse que esté activo y se ejecute una vez
+            cron.write({
+                'nextcall': fecha_ejecucion,
+                'interval_number': 1,
+                'interval_type': 'months',
+                'numbercall': 1,
+                'active': True,
+            })
+        else:
+            # Crear el cron desde cero
+            self.env['ir.cron'].create({
+                'name': 'Ejecución única para ARBA',
+                'model_id': self.env['ir.model']._get(modelo).id,
+                'state': 'code',
+                'code': f'model._procesar_txt_a_padron_perc()',
+                'interval_number':1,
+                'interval_type': 'months',
+                'numbercall': 1,
+                'nextcall': fecha_ejecucion,
+                'active': True,
+                'user_id': self.env.user.id,
+                'doall': False,
+            })
