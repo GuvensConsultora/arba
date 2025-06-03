@@ -1,6 +1,7 @@
 from odoo import models, fields, api
 from odoo.exceptions import UserError
 from datetime import datetime, timedelta
+
 import base64
 import zipfile
 import os
@@ -176,7 +177,54 @@ class ArchivoComprimido(models.Model):
             _logger.error(mensaje)
 
 
+    def actualiza_imp_pos_fiscal(self):
+        self.env.cr.execute("SELECT DISTINCT tasa FROM arba_padron WHERE tasa IS NOT NULL")
+        tasas = [row[0] for row in self.env.cr.fetchall()]
+
+        mensaje_tasas = "📊 Tasas únicas importadas:\n" + "\n".join(f"• {t}" for t in tasas)
+        self.message_post(body=mensaje_tasas)
+        _logger.info(mensaje_tasas)
 
 
-        
-        # Aquí seguirían otras funciones del modelo...
+        # Buscar el grupo de impuestos deseado
+        grupo_perc = self.env['account.tax.group'].search([('name', '=', 'Perc IIBB ARBA')], limit=1)
+        if not grupo_perc:
+            self.message_post(body="❌ No se encontró el grupo de impuestos 'Perc IIBB ARBA'.")
+            return
+
+        nuevos = []
+
+        for t in tasas:
+            try:
+                valor = float(t)
+                nombre = f"IIBB ARBA {valor:.2f}%"
+
+                # Verificar si ya existe un impuesto con esa tasa en ese grupo
+                existente = self.env['account.tax'].search([
+                    ('tax_group_id', '=', grupo_perc.id),
+                    ('amount', '=', valor)
+                ], limit=1)
+
+                if not existente:
+                    # Buscar cualquier impuesto base del grupo para usar como plantilla
+                    base = self.env['account.tax'].search([
+                        ('tax_group_id', '=', grupo_perc.id)
+                    ], limit=1)
+                    if base:
+                        nuevo = base.copy(default={
+                            'amount': valor,
+                            'name': nombre
+                        })
+                        nuevos.append(nuevo.name)
+
+            except Exception as e:
+                _logger.warning(f"⚠️ Error procesando tasa {t}: {e}")
+
+            # Informar
+        if nuevos:
+           mensaje = "🆕 Impuestos creados:\n" + "\n".join(f"• {n}" for n in nuevos)
+        else:
+           mensaje = "ℹ️ Todas las tasas ya estaban creadas dentro del grupo 'Perc IIBB ARBA'."
+
+        self.message_post(body=mensaje)
+        _logger.info(mensaje)
