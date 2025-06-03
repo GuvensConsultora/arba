@@ -180,31 +180,24 @@ class ArchivoComprimido(models.Model):
     def actualiza_imp_pos_fiscal(self):
         self.env.cr.execute("SELECT DISTINCT tasa FROM arba_padron WHERE tasa IS NOT NULL")
         tasas = [row[0] for row in self.env.cr.fetchall()]
-
         mensaje_tasas = "📊 Tasas únicas importadas:\n" + "\n".join(f"• {t}" for t in tasas)
         self.message_post(body=mensaje_tasas)
         _logger.info(mensaje_tasas)
-
-
         # Buscar el grupo de impuestos deseado
         grupo_perc = self.env['account.tax.group'].search([('name', '=', 'Perc IIBB ARBA')], limit=1)
         if not grupo_perc:
             self.message_post(body="❌ No se encontró el grupo de impuestos 'Perc IIBB ARBA'.")
             return
-
         nuevos = []
-
         for t in tasas:
             try:
                 valor = float(t)
                 nombre = f"IIBB ARBA {valor:.2f}%"
-
                 # Verificar si ya existe un impuesto con esa tasa en ese grupo
                 existente = self.env['account.tax'].search([
                     ('tax_group_id', '=', grupo_perc.id),
                     ('amount', '=', valor)
                 ], limit=1)
-
                 if not existente:
                     # Buscar cualquier impuesto base del grupo para usar como plantilla
                     base = self.env['account.tax'].search([
@@ -216,15 +209,53 @@ class ArchivoComprimido(models.Model):
                             'name': nombre
                         })
                         nuevos.append(nuevo.name)
-
             except Exception as e:
                 _logger.warning(f"⚠️ Error procesando tasa {t}: {e}")
-
-            # Informar
+        
+        # Informar
         if nuevos:
            mensaje = "🆕 Impuestos creados:\n" + "\n".join(f"• {n}" for n in nuevos)
         else:
            mensaje = "ℹ️ Todas las tasas ya estaban creadas dentro del grupo 'Perc IIBB ARBA'."
-
         self.message_post(body=mensaje)
         _logger.info(mensaje)
+        self._posiciones_fiscales()
+
+    def _posiciones_fiscales(self):
+        # Buscar el grupo de impuestos "Perc IIBB ARBA"
+        grupo_perc = self.env['account.tax.group'].search([('name', '=', 'Perc IIBB ARBA')], limit=1)
+
+        # Obtener todos los impuestos que pertenecen a ese grupo
+        impuesto_ids = self.env['account.tax'].search([('tax_group_id', '=', grupo_perc.id)]).ids
+
+        # Buscar líneas de mapeo fiscal que ya usan esos impuestos como destino
+        lineas_mapeo = self.env['account.fiscal.position.tax'].search([
+            ('tax_dest_id', 'in', impuesto_ids)
+        ])
+
+        # Extraer los IDs de impuestos ya utilizados
+        impuestos_usados = lineas_mapeo.mapped('tax_dest_id.id')
+
+        
+        # Extraer posiciones fiscales usadas
+        posiciones_usadas_ids = lineas_mapeo.mapped('position_id.id')[0] if lineas_mapeo else None
+        posicion_base = self.env['account.fiscal.position'].browse(posiciones_usadas_ids)
+        
+        # Calcular los que todavía no están usados
+        impuestos_no_usados = list(set(impuesto_ids) - set(impuestos_usados))
+
+        # (Opcional) Obtener los objetos de impuestos no usados
+        impuestos_faltantes = self.env['account.tax'].browse(impuestos_no_usados)
+
+        for impuesto_faltante in impuestos_faltantes:
+            id_nueva_posicion = posicion_base.copy({'name': f"Ventas Iva IIBB ARBA {impuesto_faltante.amount}"})
+            self.env.cr.commit()
+            raise UserError(f"id nueva posición {id_nueva_posicion}")
+        
+        if lineas_mapeo:
+            msje = f"Impuesto en Pos Fiscal{impuestos_usados}.\n Imp que no tienen Pos Fiscal {impuestos_no_usados}.\n Posiciones fiscales usadas {posiciones_usadas_ids}"
+        else:
+            msje = f"No encontré las lineas de mapero."
+        self.message_post(body=msje)
+
+    
