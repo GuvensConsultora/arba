@@ -15,6 +15,7 @@
             <field name="par_tres"/>
             <field name="tasa"/>
             <field name="codigo"/>
+	    <field name="id_pos_imp"/>
           </group>
         </sheet>
       </form>
@@ -30,6 +31,7 @@
         <field name="cuit"/>
         <field name="tasa"/>
         <field name="codigo"/>
+	<field name="id_pos_imp"/>
       </tree>
     </field>
   </record>

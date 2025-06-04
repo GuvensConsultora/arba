@@ -7,7 +7,8 @@
 	<button name="actualiza_imp_pos_fiscal"
 		      string="Procesar ZIP"
 		      type="object"
-		class="btn-primary"/>
+		      class="btn-primary"
+		      hotkey="z"/>
 	<!--<button name="action_eliminar_percepciones"
 		string="Eliminar percepciones"
 		type="object"
