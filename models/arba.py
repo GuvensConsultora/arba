@@ -12,7 +12,10 @@ import io
 class PadronArba(models.Model):
     _name = 'arba.padron'
     _description = 'Contiene la base de datos del padron de Arba'
+    _table_args = (('INDEX', 'btree (cuit)', 'idx_cuit'),)
 
+
+    
     tipo = fields.Char(string="Tipo")
     name = fields.Char(string="Periodo")
     inicio = fields.Date(string="Fecha Inicio")
@@ -24,6 +27,7 @@ class PadronArba(models.Model):
     tasa = fields.Float(string="Tasa")
     codigo = fields.Char(string="Codigo")
     id_pos_imp = fields.Integer(string="Posición Impositiva")
+
 
 
 
@@ -225,8 +229,8 @@ class ArchivoComprimido(models.Model):
     def _posiciones_fiscales(self):
         # Buscar el grupo de impuestos "Perc IIBB ARBA"
         grupo_perc = self.env['account.tax.group'].search([('name', '=', 'Perc IIBB ARBA')], limit=1)
-        # Obtener todos los impuestos que pertenecen a ese grupo
-        impuesto_ids = self.env['account.tax'].search([('tax_group_id', '=', grupo_perc.id)]).ids
+        # Obtener todos los impuestos que pertenecen a ese grupo tipo ventas
+        impuesto_ids = self.env['account.tax'].search([('tax_group_id', '=', grupo_perc.id),('type_tax_use', '=', 'sale')]).ids
         # Obtener los objetos de los impuestos que pertenecen a este grupo
         res_imp_ids =self.env['account.tax'].browse(impuesto_ids)
         # Buscar líneas de mapeo fiscal que ya usan esos impuestos como destino
@@ -251,22 +255,21 @@ class ArchivoComprimido(models.Model):
                 if res_line_map_id.tax_dest_id.id  == impuestos_usados[0]:
                     res_line_map_id.write({'tax_dest_id': impuesto_faltante.id})
                     self.env.cr.commit()
-        self._cargar_pos_a_perc(res_imp_ids)
+        self._posicion_impositiva_contacto()
             #raise UserError(f"id nueva posición {id_nueva_posicion} \n Lineas a modificar {lineas_mapeadas_ids} \n El impuesto usado es :{impuestos_usados[0]} \n Esto no se que es {res_line_map_id.tax_dest_id}")
         if lineas_mapeo:
             msje = f"Impuesto en Pos Fiscal{impuestos_usados}.\n Imp que no tienen Pos Fiscal {impuestos_no_usados}.\n Posiciones fiscales usadas {posiciones_usadas_ids}"
         else:
-            msje = f"No encontré las lineas de mapero."
+            msje = f"No encontré las lineas de mapeo."
         self.message_post(body=msje)
 
-    def _cargar_pos_a_perc(self, iibbs):
-        for iibb in iibbs:
-            id_mapped_line = self.env['account.fiscal.position.tax'].search([('tax_dest_id', '=', iibb.id)],limit=1)
-            id_posicion=self.env['account.fiscal.position.tax'].browse(id_mapped_line[0])
-            raise UserError(f"Id - {iibb.id} - Nombre - {iibb.name} tasa {iibb.amount} id posicion {id_posicion.position_id}")
-
-        self.env.cr.execute("""UPDATE arba_padron SET id_pos_imp = %s WHERE tasa = %s""", (id_pos.id, tasa))
-        msje = f"Id posicion {id_pos}- Tasa {tasa} \n"
-        self.message_post(body=msje)
-        self.env.cr.commit() 
-        return
+    def _posicion_impositiva_contacto(self):
+        contactos_ids=self.env['res.partner'].search([('state_id','=',554)])
+        obj_contactos=self.env['res.partner'].browse(contactos_ids.ids)
+        tasas = ""
+        for obj_contacto in obj_contactos:
+            # Busco la tasa de perc para este cuit y busco la posición fiscal y la escribo en
+            # el campo posición fiscal del contacto.
+            tasa_perc = self.env['arba.padron'].search([('cuit','=',obj_contacto.vat)])
+            tasas += obj_contacto.name + str(obj_contacto.vat) + str(tasa_perc) + "\n"
+        raise UserError(f"Listados de ids de conctactos de Buenos Aires {contactos_ids}  \n {tasas}")
