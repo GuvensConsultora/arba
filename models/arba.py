@@ -270,6 +270,11 @@ class ArchivoComprimido(models.Model):
         for obj_contacto in obj_contactos:
             # Busco la tasa de perc para este cuit y busco la posición fiscal y la escribo en
             # el campo posición fiscal del contacto.
-            tasa_perc = self.env['arba.padron'].search([('cuit','=',obj_contacto.vat)])
-            tasas += obj_contacto.name + str(obj_contacto.vat) + str(tasa_perc) + "\n"
+            var_cuit =  (obj_contacto.vat or '').replace('-', '')
+            tasa_perc = self.env['arba.padron'].search([('cuit','=',var_cuit)], limit=1)
+            id_imp = self.env['account.tax'].search([('amount', '=', tasa_perc.tasa),('type_tax_use', '=', 'sale')], limit=1)
+            line_perc = self.env['account.fiscal.position.tax'].search([('tax_dest_id', '=', id_imp.id)])
+            obj_contacto.write({'property_account_position_id':line_perc.position_id.id})
+            tasas += obj_contacto.name + str(var_cuit) + "Tasa:  " +  str(tasa_perc) +  str(tasa_perc.tasa) + " Id impuesto: " +  str(id_imp.id) + str(line_perc.position_id.id) +   "\n"
+            self.env.cr.commit()
         raise UserError(f"Listados de ids de conctactos de Buenos Aires {contactos_ids}  \n {tasas}")
