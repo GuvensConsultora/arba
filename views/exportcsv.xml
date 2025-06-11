@@ -1,0 +1,32 @@
+<odoo>
+  <record id="view_account_tax_csv_export_form" model="ir.ui.view">
+    <field name="name">arba.exportperc.form</field>
+    <field name="model">arba.exportperc</field>
+    <field name="arch" type="xml">
+      <form string="Exportación CSV de Impuestos">
+        <sheet>
+          <group>
+            <field name="name"/>
+            <button name="action_generate_csv" type="object" string="Generar CSV" class="btn-primary"/>
+            <field name="file_name" readonly="1"/>
+            <field name="csv_file" filename="file_name"/>
+          </group>
+        </sheet>
+      </form>
+    </field>
+  </record>
+
+  <record id="action_account_tax_csv_export" model="ir.actions.act_window">
+    <field name="name">Exportar CSV de Impuestos</field>
+    <field name="res_model">arba.exportperc</field>
+    <field name="view_mode">form</field>
+    <field name="target">current</field>
+  </record>
+
+  <!--<menuitem id="menu_arba_root" name="ARBA" sequence="10"/>-->
+
+  <menuitem id="menu_account_tax_csv_export" name="Exportar CSV Impuestos"
+            parent="menu_arba_root"
+            action="action_account_tax_csv_export"
+            sequence="20"/>
+</odoo>

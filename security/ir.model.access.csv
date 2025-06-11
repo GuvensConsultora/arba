@@ -1,3 +1,4 @@
 id,name,model_id:id,group_id:id,perm_read,perm_write,perm_create,perm_unlink
 access_archivo_comprimido,access.archivo.comprimido,model_arba_archivo_comprimido,,1,1,1,1
 access_arba_padron,access.arba.padron,model_arba_padron,,1,1,1,1
+access_export_perc_user,access.export.perc.user,model_arba_exportperc,base.group_user,1,1,1,1

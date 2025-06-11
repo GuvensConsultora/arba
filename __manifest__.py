@@ -10,6 +10,7 @@
         'security/ir.model.access.csv',
         'views/view.xml',
         'views/padron_arba_view.xml',
+        'views/exportcsv.xml',
         'data/padron.xml',
     ],
     'assets': {

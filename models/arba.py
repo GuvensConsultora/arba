@@ -1,4 +1,3 @@
-
 from odoo import models, fields, api
 from odoo.exceptions import UserError
 from datetime import datetime, timedelta
@@ -9,6 +8,7 @@ import os
 import logging
 import shutil
 import io
+import csv
 
 class PadronArba(models.Model):
     _name = 'arba.padron'
@@ -280,3 +280,15 @@ class ArchivoComprimido(models.Model):
 
             _logger.info(tasa)
             #raise UserError(f"Listados de ids de conctactos de Buenos Aires {contactos_ids}  \n {tasas}")
+
+
+class TaxExportCsv(models.Model):
+    _name = 'arba.exportperc'
+    _description = 'Exportar Impuestos'
+
+    name = fields.Char('Nombre del Archivo', required=True)
+    csv_file = fields.Binary('Archivo CSV', readonly=True)
+    file_name = fields.Char('Nombre del archivo CSV', readonly=True)
+
+    def action_generate_csv(self):
+        pass
