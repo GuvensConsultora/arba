@@ -329,7 +329,8 @@ class TaxExportCsv(models.Model):
         res_imp_ids = self.env['account.move.line'].search([
             ('account_id.name', 'ilike', 'Percepción IIBB ARBA aplicada'),
             ('invoice_date', '>=', start_date),
-            ('invoice_date', '<', end_date)
+            ('invoice_date', '<', end_date),
+            ('parent_state', '=', 'posted')
         ])
             
 
