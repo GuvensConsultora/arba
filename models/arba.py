@@ -1,5 +1,5 @@
 from odoo import models, fields, api
-from odoo.exceptions import UserError
+from odoo.exceptions import ValidationError
 from datetime import datetime, timedelta
 
 import base64
@@ -286,9 +286,106 @@ class TaxExportCsv(models.Model):
     _name = 'arba.exportperc'
     _description = 'Exportar Impuestos'
 
+
+
+    periodo_mes = fields.Selection(selection=[('01','Enero'),
+                                               ('02','Febrero'),
+                                               ('03','Marzo'),
+                                               ('04','Abril'),
+                                               ('05','Mayo'),
+                                               ('06','Junio'),
+                                               ('07','Julio'),
+                                               ('08','Agosto'),
+                                               ('09','Setiembre'),
+                                               ('10','Octubre'),
+                                               ('11','Noviembre'),
+                                               ('12','Diciembre'),],
+                                   string="✅ Mes: ",
+                                   required=True)
+
+    periodo_anio = fields.Selection(selection=[('2025','2025'),
+                                                ('2026','2026'),
+                                                ('2027','2027'),
+                                                ('2028','2028'),
+                                                ('2029','2029'),],
+                                    string="✅ Año: ",
+                                    required=True)
     name = fields.Char('Nombre del Archivo', required=True)
     csv_file = fields.Binary('Archivo CSV', readonly=True)
     file_name = fields.Char('Nombre del archivo CSV', readonly=True)
 
     def action_generate_csv(self):
-        pass
+
+        # Convertir a fechas reales (asumiendo mes y año en formato 'MM' y 'YYYY')
+        start_date = datetime.strptime(f"{self.periodo_anio}-{self.periodo_mes}-01", "%Y-%m-%d").date()
+
+        # Obtener fin del mes
+        if self.periodo_mes == '12':
+            end_date = datetime.strptime(f"{int(self.periodo_anio)+1}-01-01", "%Y-%m-%d").date()
+        else:
+            end_date = datetime.strptime(f"{self.periodo_anio}-{int(self.periodo_mes)+1:02d}-01", "%Y-%m-%d").date()
+
+        # Ahora aplicar filtro
+        res_imp_ids = self.env['account.move.line'].search([
+            ('account_id.name', 'ilike', 'Percepción IIBB ARBA aplicada'),
+            ('invoice_date', '>=', start_date),
+            ('invoice_date', '<', end_date)
+        ])
+            
+
+        # Construir lista de CUITs
+        registros = []
+        for registro in res_imp_ids:
+            partner = registro.partner_id
+            if partner and partner.vat:
+                i = partner.vat
+                cuit = self.formatear_cuit_custom(i)
+            else:
+                cuit = (f"CUIT no disponible")
+            registros.append(cuit + ";" + \
+            str(registro.invoice_date) + ";" + \
+            str(self.mapear_tipo_comprobante(registro.move_name.split()[0])) + ";" + \
+            str(self.formatear_comprobante(registro.move_name.split()[1])) + ";" + \
+            str(self.formatear_importes(registro.tax_base_amount)) + ";" + \
+            str(self.formatear_importes(registro.balance * -1)) + ";" + \
+            str((registro.move_name.split()[0]).split('-')[1]))
+        # Mostrar resultado como mensaje de error (o lo podés exportar)
+
+        texto = "\n".join(registros)
+        # Codificar como CSV y almacenar
+        archivo_codificado = base64.b64encode(texto.encode("utf-8"))
+        self.csv_file = archivo_codificado
+        self.file_name = f"percepciones_{self.periodo_mes}_{self.periodo_anio}.csv"
+        #raise ValidationError(f"{self.periodo_mes} / {self.periodo_anio}\nCUITs encontrados:\n{texto}")
+
+    def formatear_importes(self, importe):
+        entero = str(importe).split(".")[0].zfill(8)
+        decimal = str("{:.2f}".format(float(importe))).split(".")[1]
+        return entero + "," + decimal
+
+    
+    def formatear_comprobante(self, comp):
+        pref = comp.split("-")[0]
+        if pref.startswith('0'):
+            pref = pref[1:]
+        comp = pref + comp.split("-")[1]
+        return comp
+    
+    def formatear_cuit_custom(self, cuit):
+        cuit = cuit.replace('-', '').strip()
+        if len(cuit) != 11:
+            raise ValidationError(f"El nro de cuit: {cuit} está mál cargado")
+        parte1 = cuit[:2]
+        parte2 = cuit[2:10]
+        parte3 = cuit[-1]
+        return f"{parte1}-{parte2}-{parte3}"
+
+    def mapear_tipo_comprobante(self, codigo):
+        mapa = {
+            'FA-A': 'FA',
+            'FA-B': 'FB',
+            'NC-A': 'CA',
+            'NC-B': 'CB',
+            'FA-E': 'EA',
+        }
+        return mapa.get(codigo.lstrip(), 'DESCONOCIDO')

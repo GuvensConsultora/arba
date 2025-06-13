@@ -5,12 +5,26 @@
     <field name="arch" type="xml">
       <form string="Exportación CSV de Impuestos">
         <sheet>
+	    <field name="name"/>
+	    <div class="d-flex justify-content-center mt16">
+	      <table class="table table-sm w-auto">
+		<tr>
+		  <td class="pe-3">
+		    <label for="periodo_mes"/>
+		    <field name="periodo_mes"/>
+		  </td>
+		  <td class="ps-3">
+		    <label for="periodo_anio"/>
+		    <field name="periodo_anio"/>
+		  </td>
+		</tr>
+	      </table>
+	    </div>
           <group>
-            <field name="name"/>
             <button name="action_generate_csv" type="object" string="Generar CSV" class="btn-primary"/>
             <field name="file_name" readonly="1"/>
             <field name="csv_file" filename="file_name"/>
-          </group>
+	  </group>
         </sheet>
       </form>
     </field>
