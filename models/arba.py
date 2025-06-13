@@ -344,7 +344,7 @@ class TaxExportCsv(models.Model):
             else:
                 cuit = (f"CUIT no disponible")
             registros.append(cuit + ";" + \
-            str(registro.invoice_date) + ";" + \
+            str(registro.invoice_date.strftime("%d/%m/%Y")) + ";" + \
             str(self.mapear_tipo_comprobante(registro.move_name.split()[0])) + ";" + \
             str(self.formatear_comprobante(registro.move_name.split()[1])) + ";" + \
             str(self.formatear_importes(registro.tax_base_amount)) + ";" + \
