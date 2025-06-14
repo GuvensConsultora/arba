@@ -313,9 +313,15 @@ class TaxExportCsv(models.Model):
     name = fields.Char('Nombre del Archivo', required=True)
     csv_file = fields.Binary('Archivo CSV', readonly=True)
     file_name = fields.Char('Nombre del archivo CSV', readonly=True)
+    state = fields.Selection([
+        ('draft', 'Borrador'),
+        ('done', 'Hecho'),
+    ], default='draft')
 
     def action_generate_csv(self):
 
+        if self.state == 'done':
+            raise ValidationError(f"Este Archivo ya fué procesado")
         # Convertir a fechas reales (asumiendo mes y año en formato 'MM' y 'YYYY')
         start_date = datetime.strptime(f"{self.periodo_anio}-{self.periodo_mes}-01", "%Y-%m-%d").date()
 
@@ -357,6 +363,7 @@ class TaxExportCsv(models.Model):
         archivo_codificado = base64.b64encode(texto.encode("utf-8"))
         self.csv_file = archivo_codificado
         self.file_name = f"percepciones_{self.periodo_mes}_{self.periodo_anio}.csv"
+        self.state = f"done"
         #raise ValidationError(f"{self.periodo_mes} / {self.periodo_anio}\nCUITs encontrados:\n{texto}")
 
     def formatear_importes(self, importe):

@@ -4,36 +4,94 @@
     <field name="model">arba.exportperc</field>
     <field name="arch" type="xml">
       <form string="Exportación CSV de Impuestos">
+	<header>
+	  <button name="action_generate_csv" type="object" string="Generar CSV" class="btn-primary" data-hotkey="g"/>
+          <field name="state" widget="statusbar" statusbar_visible="draft,done"/>
+        </header>
         <sheet>
-	    <field name="name"/>
-	    <div class="d-flex justify-content-center mt16">
-	      <table class="table table-sm w-auto">
-		<tr>
-		  <td class="pe-3">
-		    <label for="periodo_mes"/>
-		    <field name="periodo_mes"/>
-		  </td>
-		  <td class="ps-3">
-		    <label for="periodo_anio"/>
-		    <field name="periodo_anio"/>
-		  </td>
-		</tr>
-	      </table>
-	    </div>
-          <group>
-            <button name="action_generate_csv" type="object" string="Generar CSV" class="btn-primary"/>
-            <field name="file_name" readonly="1"/>
-            <field name="csv_file" filename="file_name"/>
-	  </group>
+	  <div class="text-center mt16 mb4">
+	    <field name="name" string="Periodo a procesar:" placeholder="Ej: Periodo Julio 2025"
+		   nolabel="1" class="fw-bold"
+		   options="{'no_open': True}" 
+		   help="Aquí colocar el periodo a procesar"/>
+	  </div>
+	  <div class="d-flex justify-content-center mt16">
+	    <table class="table table-sm table-bordered w-auto" style="background-color: #f8f9fa;">
+	      <tr>
+		<td class="pe-3">
+		  <label for="periodo_mes"/>
+		  <field name="periodo_mes"/>
+		</td>
+		<td class="ps-3">
+		  <label for="periodo_anio"/>
+		  <field name="periodo_anio"/>
+		</td>
+	      </tr>
+	      <tr>
+		<td class="pe-3">
+		  <field name="file_name" readonly="1"/>
+		</td>
+		<td class="pe-3">
+		  <field name="csv_file"/>
+		</td>
+	      </tr>
+	    </table>
+	  </div>
         </sheet>
       </form>
     </field>
   </record>
 
+  <record id="view_account_tax_csv_export_tree" model="ir.ui.view">
+    <field name="name">arba.exportperc.tree</field>
+    <field name="model">arba.exportperc</field>
+    <field name="arch" type="xml">
+      <tree string="Exportaciones CSV">
+	<field name="name"/>
+	<field name="periodo_mes"/>
+	<field name="periodo_anio"/>
+      </tree>
+    </field>
+  </record>
+
+  <record id="view_account_tax_csv_export_kanban" model="ir.ui.view">
+    <field name="name">arba.exportperc.kanban</field>
+    <field name="model">arba.exportperc</field>
+    <field name="arch" type="xml">
+      <kanban>
+	<field name="name"/>
+	<field name="periodo_mes"/>
+	<field name="periodo_anio"/>
+	<field name="state"/>
+	<templates>
+	  <t t-name="kanban-box">
+	    <div class="oe_kanban_card">
+              <t t-if="record.state.raw_value == 'done'">
+		<div class="oe_kanban_badge badge badge-success">
+		  <field name="state"/>
+		</div>
+              </t>
+              <t t-if="record.state.raw_value == 'draft'">
+		<div class="oe_kanban_badge badge badge-secondary">
+		  <field name="state"/>
+		</div>
+              </t>
+              <div class="oe_kanban_details">
+		<strong><field name="name"/></strong>
+		<div>Mes: <field name="periodo_mes"/></div>
+		<div>Año: <field name="periodo_anio"/></div>
+              </div>
+	    </div>
+	  </t>
+	</templates>
+      </kanban>
+    </field>
+  </record>
+  
   <record id="action_account_tax_csv_export" model="ir.actions.act_window">
     <field name="name">Exportar CSV de Impuestos</field>
     <field name="res_model">arba.exportperc</field>
-    <field name="view_mode">form</field>
+    <field name="view_mode">tree,kanban,form</field>
     <field name="target">current</field>
   </record>
 
