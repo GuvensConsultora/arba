@@ -32,7 +32,7 @@
 		  <field name="file_name" readonly="1"/>
 		</td>
 		<td class="pe-3">
-		  <field name="csv_file"/>
+		  <field name="csv_file" filename="file_name"/>
 		</td>
 	      </tr>
 	    </table>
