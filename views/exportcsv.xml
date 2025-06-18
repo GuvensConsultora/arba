@@ -28,10 +28,8 @@
 		</td>
 	      </tr>
 	      <tr>
-		<td class="pe-3">
-		  <field name="file_name" readonly="1"/>
-		</td>
-		<td class="pe-3">
+		<td class="pe-3 text-center" colspan="2">
+		  <field name="file_name" readonly="1" invisible="1"/>
 		  <field name="csv_file" filename="file_name"/>
 		</td>
 	      </tr>
