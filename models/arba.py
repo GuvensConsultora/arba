@@ -278,9 +278,6 @@ class ArchivoComprimido(models.Model):
     def _posicion_impositiva_contacto(self):
         """Asignamos la posiciones fiscales a los contactos que corresponden"""
         obj_contactos=self.env['res.partner'].search([('state_id','=',554)])
-        #obj_contactos=self.env['res.partner'].browse(contactos_ids.ids)
-        raise ValidationError(f"{obj_contactos}")
-        _logger.info(f" OJO OJO {obj_contactos}")
         for obj_contacto in obj_contactos:
             # Busco la tasa de perc para este cuit y busco la posición fiscal y la escribo en
             
@@ -291,7 +288,6 @@ class ArchivoComprimido(models.Model):
             line_perc = self.env['account.fiscal.position.tax'].search([('tax_dest_id', '=', id_imp.id)]) # Busco la posición fiscal que surge de la retención.
             obj_contacto.write({'property_account_position_id':line_perc.position_id.id}) # Escribo en el contacto la posición
             tasa = obj_contacto.name + str(var_cuit) + "Tasa:  " +  str(tasa_perc) +  str(tasa_perc.tasa) + " Id impuesto: " +  str(id_imp.id) + str(line_perc.position_id.id) +   "\n"
-            self.env.cr.commit()
 
             _logger.info(tasa)
             #raise UserError(f"Listados de ids de contactos de Buenos Aires {contactos_ids}  \n {tasas}")
