@@ -1,4 +1,3 @@
-
 from odoo import models, fields, api
 from odoo.exceptions import ValidationError
 from datetime import datetime, timedelta
@@ -14,7 +13,7 @@ import csv
 class PadronArba(models.Model):
     _name = 'arba.padron'
     _description = 'Contiene la base de datos del padron de Arba'
-    _table_args = (('INDEX', 'btree (cuit)', 'idx_cuit'),)
+    #_table_args = (('INDEX', 'cuit'),)
 
 
     
@@ -22,7 +21,7 @@ class PadronArba(models.Model):
     name = fields.Char(string="Periodo")
     inicio = fields.Date(string="Fecha Inicio")
     fin = fields.Date(string="Fecha Final")
-    cuit = fields.Char(string="Cuit")
+    cuit = fields.Char(string="Cuit", index=True)
     par_uno = fields.Char(string="Uno")
     par_dos = fields.Char(string="Dos")
     par_tres = fields.Char(string="Tres")
@@ -229,6 +228,7 @@ class ArchivoComprimido(models.Model):
         self._posiciones_fiscales()
 
     def _posiciones_fiscales(self):
+        """Crea las posiciones fiscales nuevas, si no están creadas teniendo en cuenta la tasa del padrón de percepciones."""
         # Buscar el grupo de impuestos "Perc IIBB ARBA"
         grupo_perc = self.env['account.tax.group'].search([('name', '=', 'Perc IIBB ARBA')], limit=1)
         # Obtener todos los impuestos que pertenecen a ese grupo tipo ventas
@@ -275,24 +275,28 @@ class ArchivoComprimido(models.Model):
         self.message_post(body=msje)
 
     def _posicion_impositiva_contacto(self):
-        contactos_ids=self.env['res.partner'].search([('state_id','=',554)])
-        obj_contactos=self.env['res.partner'].browse(contactos_ids.ids)
+        """Asignamos la posiciones fiscales a los contactos que corresponden"""
+        obj_contactos=self.env['res.partner'].search([('state_id','=',554)])
+        #obj_contactos=self.env['res.partner'].browse(contactos_ids.ids)
+        _logger.info(f" OJO OJO {obj_contactos}")
         for obj_contacto in obj_contactos:
             # Busco la tasa de perc para este cuit y busco la posición fiscal y la escribo en
+            
             # el campo posición fiscal del contacto.
             var_cuit =  (obj_contacto.vat or '').replace('-', '')
-            tasa_perc = self.env['arba.padron'].search([('cuit','=',var_cuit)], limit=1)
-            id_imp = self.env['account.tax'].search([('amount', '=', tasa_perc.tasa),('type_tax_use', '=', 'sale')], limit=1)
-            line_perc = self.env['account.fiscal.position.tax'].search([('tax_dest_id', '=', id_imp.id)])
-            obj_contacto.write({'property_account_position_id':line_perc.position_id.id})
+            tasa_perc = self.env['arba.padron'].search([('cuit','=',var_cuit)], limit=1) #Busco por nro de cuit la tasa asignada en el padrón
+            id_imp = self.env['account.tax'].search([('amount', '=', tasa_perc.tasa),('type_tax_use', '=', 'sale')], limit=1) # Busco el impuesto en función de la tasa
+            line_perc = self.env['account.fiscal.position.tax'].search([('tax_dest_id', '=', id_imp.id)]) # Busco la posición fiscal que surge de la retención.
+            obj_contacto.write({'property_account_position_id':line_perc.position_id.id}) # Escribo en el contacto la posición
             tasa = obj_contacto.name + str(var_cuit) + "Tasa:  " +  str(tasa_perc) +  str(tasa_perc.tasa) + " Id impuesto: " +  str(id_imp.id) + str(line_perc.position_id.id) +   "\n"
             self.env.cr.commit()
 
             _logger.info(tasa)
-            #raise UserError(f"Listados de ids de conctactos de Buenos Aires {contactos_ids}  \n {tasas}")
+            #raise UserError(f"Listados de ids de contactos de Buenos Aires {contactos_ids}  \n {tasas}")
 
 
 class TaxExportCsv(models.Model):
+    """Modelo que crea los arcivos csv de percepciones"""
     _name = 'arba.exportperc'
     _description = 'Exportar Impuestos'
 
