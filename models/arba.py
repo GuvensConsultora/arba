@@ -1,3 +1,4 @@
+
 from odoo import models, fields, api
 from odoo.exceptions import ValidationError
 from datetime import datetime, timedelta
@@ -278,6 +279,7 @@ class ArchivoComprimido(models.Model):
         """Asignamos la posiciones fiscales a los contactos que corresponden"""
         obj_contactos=self.env['res.partner'].search([('state_id','=',554)])
         #obj_contactos=self.env['res.partner'].browse(contactos_ids.ids)
+        raise ValidationError(f"{obj_contactos}")
         _logger.info(f" OJO OJO {obj_contactos}")
         for obj_contacto in obj_contactos:
             # Busco la tasa de perc para este cuit y busco la posición fiscal y la escribo en
