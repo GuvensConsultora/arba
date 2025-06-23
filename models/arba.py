@@ -1,4 +1,3 @@
-
 from odoo import models, fields, api
 from odoo.exceptions import ValidationError
 from datetime import datetime, timedelta
@@ -286,7 +285,11 @@ class ArchivoComprimido(models.Model):
             tasa_perc = self.env['arba.padron'].search([('cuit','=',var_cuit)], limit=1) #Busco por nro de cuit la tasa asignada en el padrón
             id_imp = self.env['account.tax'].search([('amount', '=', tasa_perc.tasa),('type_tax_use', '=', 'sale')], limit=1) # Busco el impuesto en función de la tasa
             line_perc = self.env['account.fiscal.position.tax'].search([('tax_dest_id', '=', id_imp.id)]) # Busco la posición fiscal que surge de la retención.
-            obj_contacto.write({'property_account_position_id':line_perc.position_id.id}) # Escribo en el contacto la posición
+            if line_perc and line_perc.position_id:
+                obj_contacto.write({'property_account_position_id': line_perc.position_id.id})
+                obj_contacto.message_post(body=f"📌 Se actualizó la posición impositiva a: {line_perc.position_id.name}")
+            else:
+                obj_contacto.message_post(body="⚠️ No se pudo asignar posición impositiva. No se encontró una posición válida.")
             tasa = obj_contacto.name + str(var_cuit) + "Tasa:  " +  str(tasa_perc) +  str(tasa_perc.tasa) + " Id impuesto: " +  str(id_imp.id) + str(line_perc.position_id.id) +   "\n"
 
             _logger.info(tasa)
