@@ -1,5 +1,5 @@
 from odoo import models, fields, api
-from odoo.exceptions import ValidationError
+from odoo.exceptions import ValidationError, UserError
 from datetime import datetime, timedelta
 
 import base64
@@ -364,13 +364,30 @@ class TaxExportCsv(models.Model):
                 cuit = self.formatear_cuit_custom(i)
             else:
                 cuit = (f"CUIT no disponible")
+            # Por qué: move_name puede no tener el formato esperado "TIPO NRO"
+            # Se valida antes de parsear para informar al usuario qué registro falla
+            partes = registro.move_name.split() if registro.move_name else []
+            if len(partes) < 2:
+                raise UserError(
+                    f"El comprobante '{registro.move_name}' (ID: {registro.move_id.id}, "
+                    f"Partner: {registro.partner_id.name or 'Sin partner'}) "
+                    f"no tiene el formato esperado 'TIPO NUMERO' (ej: 'FA-A 0001-00000123')."
+                )
+            tipo_comp = partes[0]
+            nro_comp = partes[1]
+            if '-' not in tipo_comp:
+                raise UserError(
+                    f"El tipo de comprobante '{tipo_comp}' del documento '{registro.move_name}' "
+                    f"(ID: {registro.move_id.id}, Partner: {registro.partner_id.name or 'Sin partner'}) "
+                    f"no contiene el separador '-'. Formato esperado: 'FA-A', 'NC-B', etc."
+                )
             registros.append(cuit + ";" + \
             str(registro.invoice_date.strftime("%d/%m/%Y")) + ";" + \
-            str(self.mapear_tipo_comprobante(registro.move_name.split()[0])) + ";" + \
-            str(self.formatear_comprobante(registro.move_name.split()[1])) + ";" + \
+            str(self.mapear_tipo_comprobante(tipo_comp)) + ";" + \
+            str(self.formatear_comprobante(nro_comp)) + ";" + \
             str(self.formatear_importes(registro.tax_base_amount)) + ";" + \
             str(self.formatear_importes(registro.balance * -1)) + ";" + \
-            str((registro.move_name.split()[0]).split('-')[1]))
+            str(tipo_comp.split('-')[1]))
         # Mostrar resultado como mensaje de error (o lo podés exportar)
 
         texto = "\n".join(registros)
