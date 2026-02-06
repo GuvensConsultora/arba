@@ -327,22 +327,22 @@ class TaxExportCsv(models.Model):
                                     string="✅ Año: ",
                                     required=True)
     name = fields.Char('Nombre del Archivo', required=True)
-    csv_file = fields.Binary('Archivo CSV')
     file_name = fields.Char('Nombre del archivo CSV')
-    # Por qué: campo Html computed que genera un <a> clickeable
-    # apuntando a /web/content para descarga directa sin abrir pestaña
-    download_link = fields.Html('Descargar', compute='_compute_download_link')
+    attachment_id = fields.Many2one('ir.attachment', 'Archivo CSV', ondelete='set null')
+    # Por qué: campo Html computed que genera un <a href> apuntando a
+    # /web/content/<attachment_id> que es la URL estándar de descarga en Odoo 17
+    download_link = fields.Html('Descargar', compute='_compute_download_link', sanitize=False)
     state = fields.Selection([
         ('draft', 'Borrador'),
         ('done', 'Hecho'),
     ], default='draft')
 
-    @api.depends('csv_file', 'file_name')
+    @api.depends('attachment_id', 'file_name')
     def _compute_download_link(self):
         for rec in self:
-            if rec.csv_file and rec.file_name:
-                url = '/web/content?model=%s&id=%d&field=csv_file&filename_field=file_name&download=true' % (rec._name, rec.id)
-                rec.download_link = Markup('<a href="%s">%s</a>') % (url, rec.file_name)
+            if rec.attachment_id and rec.file_name:
+                url = '/web/content/%d?download=true' % rec.attachment_id.id
+                rec.download_link = Markup('<a href="%s">📥 %s</a>') % (url, rec.file_name)
             else:
                 rec.download_link = False
 
@@ -407,11 +407,19 @@ class TaxExportCsv(models.Model):
 
         texto = "\n".join(registros)
         nombre = f"percepciones_{self.periodo_mes}_{self.periodo_anio}.csv"
-        # Por qué: decode('utf-8') convierte bytes a str, que es lo que
-        # el widget Binary de Odoo 17 necesita para renderizar el link de descarga
+        # Por qué: ir.attachment es el mecanismo estándar de Odoo para archivos descargables
+        # /web/content/<attachment_id> es la URL nativa que siempre funciona
+        attachment = self.env['ir.attachment'].create({
+            'name': nombre,
+            'type': 'binary',
+            'datas': base64.b64encode(texto.encode("utf-8")).decode("utf-8"),
+            'res_model': self._name,
+            'res_id': self.id,
+            'mimetype': 'text/csv',
+        })
         self.write({
-            'csv_file': base64.b64encode(texto.encode("utf-8")).decode("utf-8"),
             'file_name': nombre,
+            'attachment_id': attachment.id,
             'state': 'done',
         })
 
