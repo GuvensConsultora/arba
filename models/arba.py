@@ -398,15 +398,6 @@ class TaxExportCsv(models.Model):
         self.csv_file = archivo_codificado
         self.file_name = f"percepciones_{self.periodo_mes}_{self.periodo_anio}.csv"
         self.state = 'done'
-        # Por qué: se recarga el form para que el usuario vea el archivo generado
-        # Sin este return, el cliente no refresca y el campo csv_file no aparece
-        return {
-            'type': 'ir.actions.act_window',
-            'res_model': self._name,
-            'res_id': self.id,
-            'view_mode': 'form',
-            'target': 'current',
-        }
 
     def formatear_importes(self, importe):
         entero = str(importe).split(".")[0].zfill(8)
