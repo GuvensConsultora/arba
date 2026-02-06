@@ -402,6 +402,15 @@ class TaxExportCsv(models.Model):
             'state': 'done',
         })
 
+    def action_download_csv(self):
+        """Descarga el archivo CSV generado via /web/content"""
+        self.ensure_one()
+        return {
+            'type': 'ir.actions.act_url',
+            'url': '/web/content?model=%s&id=%d&field=csv_file&filename_field=file_name&download=true' % (self._name, self.id),
+            'target': 'self',
+        }
+
     def formatear_importes(self, importe):
         entero = str(importe).split(".")[0].zfill(8)
         decimal = str("{:.2f}".format(float(importe))).split(".")[1]
