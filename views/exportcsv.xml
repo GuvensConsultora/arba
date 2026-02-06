@@ -6,7 +6,6 @@
       <form string="Exportación CSV de Impuestos">
 	<header>
 	  <button name="action_generate_csv" type="object" string="Generar CSV" class="btn-primary" data-hotkey="g" invisible="state == 'done'"/>
-	  <button name="action_download_csv" type="object" string="Descargar CSV" class="btn-success" icon="fa-download" invisible="state != 'done'"/>
           <field name="state" widget="statusbar" statusbar_visible="draft,done"/>
         </header>
         <sheet>
@@ -30,7 +29,7 @@
 	      </tr>
 	      <tr invisible="state != 'done'">
 		<td class="pe-3 text-center" colspan="2">
-		  <field name="file_name"/>
+		  <field name="download_link" nolabel="1"/>
 		</td>
 	      </tr>
 	    </table>

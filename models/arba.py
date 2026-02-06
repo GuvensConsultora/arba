@@ -9,6 +9,7 @@ import logging
 import shutil
 import io
 import csv
+from markupsafe import Markup
 
 class PadronArba(models.Model):
     _name = 'arba.padron'
@@ -328,10 +329,22 @@ class TaxExportCsv(models.Model):
     name = fields.Char('Nombre del Archivo', required=True)
     csv_file = fields.Binary('Archivo CSV')
     file_name = fields.Char('Nombre del archivo CSV')
+    # Por qué: campo Html computed que genera un <a> clickeable
+    # apuntando a /web/content para descarga directa sin abrir pestaña
+    download_link = fields.Html('Descargar', compute='_compute_download_link')
     state = fields.Selection([
         ('draft', 'Borrador'),
         ('done', 'Hecho'),
     ], default='draft')
+
+    @api.depends('csv_file', 'file_name')
+    def _compute_download_link(self):
+        for rec in self:
+            if rec.csv_file and rec.file_name:
+                url = '/web/content?model=%s&id=%d&field=csv_file&filename_field=file_name&download=true' % (rec._name, rec.id)
+                rec.download_link = Markup('<a href="%s">%s</a>') % (url, rec.file_name)
+            else:
+                rec.download_link = False
 
     def action_generate_csv(self):
 
@@ -401,15 +414,6 @@ class TaxExportCsv(models.Model):
             'file_name': nombre,
             'state': 'done',
         })
-
-    def action_download_csv(self):
-        """Descarga el archivo CSV generado via /web/content"""
-        self.ensure_one()
-        return {
-            'type': 'ir.actions.act_url',
-            'url': '/web/content?model=%s&id=%d&field=csv_file&filename_field=file_name&download=true' % (self._name, self.id),
-            'target': 'self',
-        }
 
     def formatear_importes(self, importe):
         entero = str(importe).split(".")[0].zfill(8)
