@@ -29,9 +29,8 @@
 	      </tr>
 	      <tr>
 		<td class="pe-3 text-center" colspan="2">
-		  <label for="csv_file" string="Archivo CSV"/>
 		  <field name="file_name" invisible="1"/>
-		  <field name="csv_file" filename="file_name" readonly="state == 'done'"/>
+		  <field name="csv_file" filename="file_name" readonly="1"/>
 		</td>
 	      </tr>
 	    </table>

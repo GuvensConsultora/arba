@@ -394,12 +394,10 @@ class TaxExportCsv(models.Model):
 
         texto = "\n".join(registros)
         nombre = f"percepciones_{self.periodo_mes}_{self.periodo_anio}.csv"
-        # Por qué: write() explícito garantiza que el binario se persista en DB
-        # antes de generar la URL de descarga
-        # Por qué: write() explícito para persistir el binario en DB
-        # Al no retornar acción, Odoo 17 recarga el form automáticamente
+        # Por qué: decode('utf-8') convierte bytes a str, que es lo que
+        # el widget Binary de Odoo 17 necesita para renderizar el link de descarga
         self.write({
-            'csv_file': base64.b64encode(texto.encode("utf-8")),
+            'csv_file': base64.b64encode(texto.encode("utf-8")).decode("utf-8"),
             'file_name': nombre,
             'state': 'done',
         })
