@@ -326,8 +326,8 @@ class TaxExportCsv(models.Model):
                                     string="✅ Año: ",
                                     required=True)
     name = fields.Char('Nombre del Archivo', required=True)
-    csv_file = fields.Binary('Archivo CSV', readonly=True)
-    file_name = fields.Char('Nombre del archivo CSV', readonly=True)
+    csv_file = fields.Binary('Archivo CSV')
+    file_name = fields.Char('Nombre del archivo CSV')
     state = fields.Selection([
         ('draft', 'Borrador'),
         ('done', 'Hecho'),
@@ -396,18 +396,13 @@ class TaxExportCsv(models.Model):
         nombre = f"percepciones_{self.periodo_mes}_{self.periodo_anio}.csv"
         # Por qué: write() explícito garantiza que el binario se persista en DB
         # antes de generar la URL de descarga
+        # Por qué: write() explícito para persistir el binario en DB
+        # Al no retornar acción, Odoo 17 recarga el form automáticamente
         self.write({
             'csv_file': base64.b64encode(texto.encode("utf-8")),
             'file_name': nombre,
             'state': 'done',
         })
-        # Por qué: act_url con target 'new' fuerza descarga directa del archivo
-        # sin depender del widget binary del form
-        return {
-            'type': 'ir.actions.act_url',
-            'url': '/web/content?model=%s&id=%d&field=csv_file&filename_field=file_name&download=true' % (self._name, self.id),
-            'target': 'new',
-        }
 
     def formatear_importes(self, importe):
         entero = str(importe).split(".")[0].zfill(8)
