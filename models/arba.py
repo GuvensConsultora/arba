@@ -346,9 +346,11 @@ class TaxExportCsv(models.Model):
         else:
             end_date = datetime.strptime(f"{self.periodo_anio}-{int(self.periodo_mes)+1:02d}-01", "%Y-%m-%d").date()
 
-        # Ahora aplicar filtro
+        # Por qué: se filtra por move_type 'out_invoice' y 'out_refund' para
+        # tomar solo comprobantes de venta, excluyendo facturas de proveedor
         res_imp_ids = self.env['account.move.line'].search([
             ('account_id.name', 'ilike', 'Percepción IIBB ARBA aplicada'),
+            ('move_id.move_type', 'in', ['out_invoice', 'out_refund']),
             ('invoice_date', '>=', start_date),
             ('invoice_date', '<', end_date),
             ('parent_state', '=', 'posted')
