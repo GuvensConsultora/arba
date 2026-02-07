@@ -370,43 +370,85 @@ class TaxExportCsv(models.Model):
         ])
             
 
-        # Construir lista de CUITs
+        # Por qué: formato ARBA posición fija 81 chars (RN 22/2025, vigente desde dic 2025)
+        # Campos: CUIT(13) + FechaPerc(10) + TipoComp(1) + Letra(1) + Suc(5) + Emision(8)
+        #         + MontoImp(14) + Alicuota(5) + ImpPerc(13) + FechaEmision(10) + TipoOp(1)
         registros = []
         for registro in res_imp_ids:
+            # Campo 1: CUIT (13 chars) - formato XX-XXXXXXXX-X
             partner = registro.partner_id
-            if partner and partner.vat:
-                i = partner.vat
-                cuit = self.formatear_cuit_custom(i)
-            else:
-                cuit = (f"CUIT no disponible")
-            # Por qué: move_name puede no tener el formato esperado "TIPO NRO"
-            # Se valida antes de parsear para informar al usuario qué registro falla
+            if not partner or not partner.vat:
+                raise UserError(
+                    f"El partner '{partner.name or 'Sin partner'}' del comprobante "
+                    f"'{registro.move_name}' no tiene CUIT cargado."
+                )
+            cuit = self._formatear_cuit_arba(partner.vat)
+
+            # Parsear move_name: "FA-A 0001-00000020"
             partes = registro.move_name.split() if registro.move_name else []
-            if len(partes) < 2:
+            if len(partes) < 2 or '-' not in partes[0]:
                 raise UserError(
                     f"El comprobante '{registro.move_name}' (ID: {registro.move_id.id}, "
-                    f"Partner: {registro.partner_id.name or 'Sin partner'}) "
-                    f"no tiene el formato esperado 'TIPO NUMERO' (ej: 'FA-A 0001-00000123')."
+                    f"Partner: {partner.name or 'Sin partner'}) "
+                    f"no tiene el formato esperado 'TIPO-LETRA SUCURSAL-NUMERO'."
                 )
-            tipo_comp = partes[0]
-            nro_comp = partes[1]
-            if '-' not in tipo_comp:
+            tipo_odoo = partes[0]   # ej: "FA-A"
+            nro_comp = partes[1]    # ej: "0001-00000020"
+
+            # Campo 3: Tipo comprobante (1 char) - F, C, D
+            tipo_arba = self._mapear_tipo_comprobante_arba(tipo_odoo)
+            # Campo 4: Letra comprobante (1 char) - A, B, C
+            letra = tipo_odoo.split('-')[1] if '-' in tipo_odoo else ' '
+
+            # Campos 5 y 6: Sucursal (5 chars) y Emisión (8 chars)
+            partes_nro = nro_comp.split('-')
+            if len(partes_nro) < 2:
                 raise UserError(
-                    f"El tipo de comprobante '{tipo_comp}' del documento '{registro.move_name}' "
-                    f"(ID: {registro.move_id.id}, Partner: {registro.partner_id.name or 'Sin partner'}) "
-                    f"no contiene el separador '-'. Formato esperado: 'FA-A', 'NC-B', etc."
+                    f"El número de comprobante '{nro_comp}' del documento '{registro.move_name}' "
+                    f"no tiene el formato esperado 'SUCURSAL-NUMERO'."
                 )
-            registros.append(cuit + ";" + \
-            str(registro.invoice_date.strftime("%d/%m/%Y")) + ";" + \
-            str(self.mapear_tipo_comprobante(tipo_comp)) + ";" + \
-            str(self.formatear_comprobante(nro_comp)) + ";" + \
-            str(self.formatear_importes(registro.tax_base_amount)) + ";" + \
-            str(self.formatear_importes(registro.balance * -1)) + ";" + \
-            str(tipo_comp.split('-')[1]))
-        # Mostrar resultado como mensaje de error (o lo podés exportar)
+            sucursal = partes_nro[0].zfill(5)
+            emision = partes_nro[1].zfill(8)
+
+            # Campo 2: Fecha percepción (10 chars) dd/mm/aaaa
+            fecha_perc = registro.invoice_date.strftime("%d/%m/%Y")
+
+            # Campo 7: Monto imponible (14 chars) - 11 enteros + . + 2 dec
+            monto_imp = self._formatear_importe_arba(registro.tax_base_amount, 11)
+
+            # Campo 8: Alícuota (5 chars) - 2 enteros + . + 2 dec
+            # Por qué: se obtiene la alícuota del impuesto asociado a la línea
+            tax = registro.tax_line_id
+            alicuota = abs(tax.amount) if tax else 0.0
+            alicuota_str = self._formatear_importe_arba(alicuota, 2)
+
+            # Campo 9: Importe percepción (13 chars) - 10 enteros + . + 2 dec
+            imp_perc = self._formatear_importe_arba(abs(registro.balance), 10)
+
+            # Campo 10: Fecha emisión (10 chars) dd/mm/aaaa
+            fecha_emi = registro.invoice_date.strftime("%d/%m/%Y")
+
+            # Campo 11: Tipo operación (1 char) - A=Alta
+            tipo_op = 'A'
+
+            # Concatenar posición fija (81 chars)
+            linea = (
+                cuit +          # 13
+                fecha_perc +    # 10
+                tipo_arba +     # 1
+                letra +         # 1
+                sucursal +      # 5
+                emision +       # 8
+                monto_imp +     # 14
+                alicuota_str +  # 5
+                imp_perc +      # 13
+                fecha_emi +     # 10
+                tipo_op         # 1
+            )
+            registros.append(linea)
 
         texto = "\n".join(registros)
-        nombre = f"percepciones_{self.periodo_mes}_{self.periodo_anio}.csv"
+        nombre = f"percepciones_{self.periodo_mes}_{self.periodo_anio}.txt"
         # Por qué: ir.attachment es el mecanismo estándar de Odoo para archivos descargables
         # /web/content/<attachment_id> es la URL nativa que siempre funciona
         attachment = self.env['ir.attachment'].create({
@@ -415,7 +457,7 @@ class TaxExportCsv(models.Model):
             'datas': base64.b64encode(texto.encode("utf-8")).decode("utf-8"),
             'res_model': self._name,
             'res_id': self.id,
-            'mimetype': 'text/csv',
+            'mimetype': 'text/plain',
         })
         self.write({
             'file_name': nombre,
@@ -423,34 +465,40 @@ class TaxExportCsv(models.Model):
             'state': 'done',
         })
 
-    def formatear_importes(self, importe):
-        entero = str(importe).split(".")[0].zfill(8)
-        decimal = str("{:.2f}".format(float(importe))).split(".")[1]
-        return entero + "," + decimal
+    def _formatear_importe_arba(self, importe, enteros):
+        """Formatea importe a posición fija ARBA: enteros + '.' + 2 decimales.
+        Por qué: ARBA exige ceros a la izquierda y punto como separador decimal.
+        Ej: _formatear_importe_arba(45.0, 10) → '0000000045.00' (13 chars)
+        """
+        valor = abs(float(importe))
+        parte_entera = str(int(valor)).zfill(enteros)
+        parte_decimal = "{:.2f}".format(valor).split(".")[1]
+        return parte_entera + "." + parte_decimal
 
-    
-    def formatear_comprobante(self, comp):
-        pref = comp.split("-")[0]
-        if pref.startswith('0'):
-            pref = pref[1:]
-        comp = pref + comp.split("-")[1]
-        return comp
-    
-    def formatear_cuit_custom(self, cuit):
+    def _formatear_cuit_arba(self, cuit):
+        """Formatea CUIT a formato ARBA: XX-XXXXXXXX-X (13 chars).
+        Por qué: ARBA exige guiones y exactamente 13 caracteres.
+        """
         cuit = cuit.replace('-', '').strip()
         if len(cuit) != 11:
-            raise ValidationError(f"El nro de cuit: {cuit} está mál cargado")
-        parte1 = cuit[:2]
-        parte2 = cuit[2:10]
-        parte3 = cuit[-1]
-        return f"{parte1}-{parte2}-{parte3}"
+            raise UserError(f"El CUIT '{cuit}' no tiene 11 dígitos.")
+        return f"{cuit[:2]}-{cuit[2:10]}-{cuit[10]}"
 
-    def mapear_tipo_comprobante(self, codigo):
+    def _mapear_tipo_comprobante_arba(self, tipo_odoo):
+        """Mapea prefijo Odoo a tipo comprobante ARBA (1 char).
+        Por qué: ARBA usa F=Factura, C=Nota Crédito, D=Nota Débito.
+        """
+        # tipo_odoo viene como "FA-A", "NC-B", "ND-A", etc.
+        prefijo = tipo_odoo.split('-')[0]
         mapa = {
-            'FA-A': 'FA',
-            'FA-B': 'FB',
-            'NC-A': 'CA',
-            'NC-B': 'CB',
-            'FA-E': 'EA',
+            'FA': 'F',
+            'NC': 'C',
+            'ND': 'D',
         }
-        return mapa.get(codigo.lstrip(), 'DESCONOCIDO')
+        resultado = mapa.get(prefijo)
+        if not resultado:
+            raise UserError(
+                f"Tipo de comprobante '{tipo_odoo}' no tiene mapeo ARBA. "
+                f"Esperados: FA-x, NC-x, ND-x."
+            )
+        return resultado
