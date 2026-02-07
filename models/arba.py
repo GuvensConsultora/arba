@@ -490,10 +490,15 @@ class TaxExportCsv(models.Model):
         """
         # tipo_odoo viene como "FA-A", "NC-B", "ND-A", etc.
         prefijo = tipo_odoo.split('-')[0]
+        # Por qué: FCE/NCE/NDE son Facturas/NC/ND de Crédito Electrónica,
+        # para ARBA se mapean igual que las convencionales
         mapa = {
             'FA': 'F',
+            'FCE': 'F',
             'NC': 'C',
+            'NCE': 'C',
             'ND': 'D',
+            'NDE': 'D',
         }
         resultado = mapa.get(prefijo)
         if not resultado:
