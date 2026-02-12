@@ -46,16 +46,49 @@
     </field>
   </record>
 
-  <record id="action_padron_arba" model="ir.actions.act_window">
-    <field name="name">Padrones ARBA</field>
-    <field name="res_model">arba.padron</field>
-    <field name="view_mode">tree,form</field>
+  <!-- Por qué: vista tree específica para retenciones, muestra tipo para distinguir -->
+  <record id="view_padron_arba_ret_tree" model="ir.ui.view">
+    <field name="name">padron.arba.ret.tree</field>
+    <field name="model">arba.padron</field>
+    <field name="arch" type="xml">
+      <tree string="Padrón Retenciones ARBA">
+        <field name="tipo"/>
+        <field name="name"/>
+        <field name="cuit"/>
+        <field name="inicio"/>
+        <field name="fin"/>
+        <field name="tasa"/>
+        <field name="codigo"/>
+      </tree>
+    </field>
   </record>
 
-  
+  <!-- Acción percepciones (filtro tipo P%) -->
+  <record id="action_padron_arba" model="ir.actions.act_window">
+    <field name="name">Padrón Percepciones</field>
+    <field name="res_model">arba.padron</field>
+    <field name="view_mode">tree,form</field>
+    <field name="domain">[('tipo', '=like', 'P%')]</field>
+  </record>
+
+  <!-- Acción retenciones (filtro tipo R%) -->
+  <record id="action_padron_arba_ret" model="ir.actions.act_window">
+    <field name="name">Padrón Retenciones</field>
+    <field name="res_model">arba.padron</field>
+    <field name="view_mode">tree,form</field>
+    <field name="domain">[('tipo', '=like', 'R%')]</field>
+    <field name="view_id" ref="view_padron_arba_ret_tree"/>
+  </record>
+
   <menuitem id="menu_padron_arba"
-            name="Padrones ARBA"
+            name="Padrón Percepciones"
             parent="menu_arba_root"
             action="action_padron_arba"
             sequence="20"/>
+
+  <menuitem id="menu_padron_arba_ret"
+            name="Padrón Retenciones"
+            parent="menu_arba_root"
+            action="action_padron_arba_ret"
+            sequence="21"/>
 </odoo>

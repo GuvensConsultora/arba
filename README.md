@@ -38,6 +38,12 @@ Odoo no sabe que alicuota de percepcion o retencion IIBB aplicar a cada contribu
    - Asignacion de posicion fiscal a cada contacto de Buenos Aires segun su CUIT
    - Creacion/actualizacion de `res.partner.perception` con tasas de retencion
 
+#### Paso 2b: Consultar padron importado
+- **ARBA > Padron Percepciones** — muestra registros del padron con tipo `P` (percepciones)
+- **ARBA > Padron Retenciones** — muestra registros del padron con tipo `R` (retenciones)
+
+Ambas vistas permiten buscar por CUIT y ver la tasa asignada a cada contribuyente.
+
 #### Paso 3: Percepciones en ventas (automatico)
 Cuando se emite una factura a un cliente de Buenos Aires:
 - La posicion fiscal asignada aplica el impuesto de percepcion correspondiente
@@ -116,8 +122,9 @@ Al instalar se crean automaticamente:
 4. Guardar
 
 ### Paso 3: Habilitar retenciones automaticas
-1. Ir a **Ajustes > Contabilidad**
-2. Activar **"Retenciones automaticas"** (`automatic_withholdings = True`)
+1. Ir a **Ajustes > Compañias > [tu compañia]**
+2. Pestaña **"Retenciones"**
+3. Activar checkbox **"Retenciones automaticas"**
 
 ### Paso 4: Verificar grupo de impuestos de percepciones
 El modulo asume que existe un grupo **"Perc IIBB ARBA"** con al menos un impuesto base de tipo venta. Si no existe, crearlo manualmente antes de procesar el padron.
@@ -154,9 +161,10 @@ arba/
 │   └── arba_ret_export.py       # TaxExportRet (export TXT retenciones)
 ├── views/
 │   ├── view.xml                 # Vistas ArchivoComprimido + menu raiz ARBA
-│   ├── padron_arba_view.xml     # Vistas padron
+│   ├── padron_arba_view.xml     # Vistas padron (percepciones + retenciones filtradas)
 │   ├── exportcsv.xml            # Vistas export percepciones
-│   └── exportret.xml            # Vistas export retenciones
+│   ├── exportret.xml            # Vistas export retenciones
+│   └── res_company_view.xml     # Checkbox retenciones automaticas en compañia
 ├── data/
 │   ├── padron.xml               # Crons de padron
 │   └── ret_tax_data.xml         # Tax group + tax + secuencia retenciones
@@ -304,7 +312,7 @@ Busca `account.payment` con `tax_withholding_id = Ret IIBB ARBA`, construye line
 
 1. **Instalar modulo**: Upgrade del modulo arba, verificar que crea tax group + tax + secuencia
 2. **Configurar tax**: Asignar cuenta contable al impuesto Ret IIBB ARBA
-3. **Habilitar retenciones automaticas**: Ajustes > Contabilidad > `automatic_withholdings = True`
+3. **Habilitar retenciones automaticas**: Ajustes > Compañias > [compañia] > pestaña Retenciones > checkbox
 4. **Importar padron**: Subir ZIP con Per y Ret → verificar que `arba.padron` tiene registros tipo R
 5. **Procesar ZIP**: Click "Procesar ZIP" → verificar que `res.partner.perception` se creo para partners de BA con tax Ret IIBB ARBA
 6. **Pago a proveedor**: Crear Payment Group → confirmar → verificar retencion automatica con alicuota del padron
