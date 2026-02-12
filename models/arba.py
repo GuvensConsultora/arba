@@ -124,10 +124,18 @@ class ArchivoComprimido(models.Model):
             self.message_post(body=mensaje)
             _logger.info(mensaje)
 
-            # Buscar archivo que contenga 'Per' y ejecutar _procesar_txt_en_perc
+            # Por qué: TRUNCATE una sola vez antes de procesar Per y Ret
+            # para no borrar retenciones al cargar percepciones o viceversa
+            self.env.cr.execute("TRUNCATE TABLE arba_padron RESTART IDENTITY")
+            self.message_post(body="Se ejecutó TRUNCATE sobre la tabla `arba_padron`.")
+            _logger.info("Se eliminó todo el contenido de arba_padron con TRUNCATE.")
+
             for archivo in archivos_extraidos:
-                if 'Per' in os.path.basename(archivo):
+                nombre = os.path.basename(archivo)
+                if 'Per' in nombre:
                     self._procesar_txt_en_perc(archivo)
+                elif 'Ret' in nombre:
+                    self._procesar_txt_en_ret(archivo)
                                 
         except Exception as e:
             error_msg = f"❌ Error al descomprimir archivo ZIP {ruta_zip}: {e}"
@@ -138,9 +146,8 @@ class ArchivoComprimido(models.Model):
         return archivos_extraidos
 
     def _procesar_txt_en_perc(self, archivo):
-        self.env.cr.execute("TRUNCATE TABLE arba_padron RESTART IDENTITY")
-        self.message_post(body="🧹 Se ejecutó TRUNCATE sobre la tabla `arba_padron`.")
-        _logger.info("🧹 Se eliminó todo el contenido de arba_padron con TRUNCATE.")
+        # Por qué: TRUNCATE se movió al caller _procesar_zip_comprimido
+        # para ejecutarse una sola vez antes de Per + Ret
         ruta_completa = os.path.join("/tmp/arba", archivo)
         try:
             buffer = io.StringIO()
@@ -183,6 +190,52 @@ class ArchivoComprimido(models.Model):
             self.message_post(body=mensaje)
             _logger.error(mensaje)
 
+
+    def _procesar_txt_en_ret(self, archivo):
+        """Importa registros de retenciones del padrón ARBA.
+        Por qué: misma lógica COPY que percepciones, sin TRUNCATE
+        (ya se ejecutó en el caller). Los registros tienen tipo que empieza con 'R'.
+        """
+        ruta_completa = os.path.join("/tmp/arba", archivo)
+        try:
+            buffer = io.StringIO()
+            validas = 0
+            descartadas = 0
+
+            with open(ruta_completa, 'r', encoding='latin1') as f:
+                for linea in f:
+                    columnas = linea.strip().split(';')
+                    if len(columnas) >= 10:
+                        columnas[2] = self.convertir_fecha(columnas[2])  # inicio
+                        columnas[3] = self.convertir_fecha(columnas[3])  # fin
+                        columnas[8] = columnas[8].replace(',', '.')      # tasa
+                        buffer.write(';'.join(columnas[:10]) + '\n')
+                        validas += 1
+                    else:
+                        descartadas += 1
+
+            buffer.seek(0)
+
+            self.env.cr.copy_expert(
+                sql="""
+                COPY arba_padron(tipo, name, inicio, fin, cuit, par_uno, par_dos, par_tres, tasa, codigo)
+                FROM STDIN WITH (FORMAT csv, DELIMITER ';', HEADER false, ENCODING 'LATIN1')
+                """,
+                file=buffer
+            )
+
+            mensaje = (
+                f"Registros RET importados desde {os.path.basename(ruta_completa)}\n"
+                f"Líneas válidas: {validas}\n"
+                f"Líneas descartadas: {descartadas}"
+            )
+            self.message_post(body=mensaje)
+            _logger.info(mensaje)
+
+        except Exception as e:
+            mensaje = f"Error al importar RET desde {ruta_completa}: {e}"
+            self.message_post(body=mensaje)
+            _logger.error(mensaje)
 
     def actualiza_imp_pos_fiscal(self):
         self.env.cr.execute("SELECT DISTINCT tasa FROM arba_padron WHERE tasa IS NOT NULL")
@@ -227,6 +280,9 @@ class ArchivoComprimido(models.Model):
         self.message_post(body=mensaje)
         _logger.info(mensaje)
         self._posiciones_fiscales()
+        # Por qué: después de actualizar percepciones, alimentamos
+        # res.partner.perception con tasas de retención del padrón
+        self._actualizar_retenciones_partners()
 
     def _posiciones_fiscales(self):
         """Crea las posiciones fiscales nuevas, si no están creadas teniendo en cuenta la tasa del padrón de percepciones."""
@@ -295,6 +351,71 @@ class ArchivoComprimido(models.Model):
 
             _logger.info(tasa)
             #raise UserError(f"Listados de ids de contactos de Buenos Aires {contactos_ids}  \n {tasas}")
+
+
+    def _actualizar_retenciones_partners(self):
+        """Alimenta res.partner.perception con tasas de retención del padrón ARBA.
+        Por qué: el motor OCA (get_partner_alicuot) lee de perception_ids
+        para obtener la alícuota. Si creamos registros ahí con el tax 'Ret IIBB ARBA',
+        el cálculo automático de retenciones funciona sin código adicional.
+        Patrón: data-driven — solo alimentamos datos, la lógica la ejecuta OCA.
+        """
+        # Buscar el impuesto de retención IIBB ARBA (type_tax_use=supplier)
+        tax_ret = self.env['account.tax'].search([
+            ('name', '=', 'Ret IIBB ARBA'),
+            ('type_tax_use', '=', 'supplier'),
+        ], limit=1)
+        if not tax_ret:
+            self.message_post(body="No se encontró el impuesto 'Ret IIBB ARBA' (supplier). "
+                                   "Verifique que el data XML se cargó correctamente.")
+            return
+
+        # Partners de Buenos Aires (state_id=554)
+        partners_ba = self.env['res.partner'].search([('state_id', '=', 554)])
+        creados = 0
+        actualizados = 0
+
+        for partner in partners_ba:
+            cuit = (partner.vat or '').replace('-', '')
+            if not cuit:
+                continue
+
+            # Buscar en padrón registros de retención (tipo empieza con 'R')
+            padron_ret = self.env['arba.padron'].search([
+                ('cuit', '=', cuit),
+                ('tipo', '=like', 'R%'),
+            ], limit=1)
+            if not padron_ret:
+                continue
+
+            tasa = padron_ret.tasa or 0.0
+
+            # Buscar si ya existe un perception para este partner + tax
+            perception = self.env['res.partner.perception'].search([
+                ('partner_id', '=', partner.id),
+                ('tax_id', '=', tax_ret.id),
+            ], limit=1)
+
+            if perception:
+                # Actualizar si la tasa cambió
+                if perception.percent != tasa:
+                    perception.write({'percent': tasa})
+                    actualizados += 1
+            else:
+                # Crear nuevo registro
+                self.env['res.partner.perception'].create({
+                    'partner_id': partner.id,
+                    'tax_id': tax_ret.id,
+                    'percent': tasa,
+                })
+                creados += 1
+
+        mensaje = (
+            f"Retenciones IIBB ARBA actualizadas en partners:\n"
+            f"Creados: {creados} | Actualizados: {actualizados}"
+        )
+        self.message_post(body=mensaje)
+        _logger.info(mensaje)
 
 
 class TaxExportCsv(models.Model):

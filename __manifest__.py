@@ -5,12 +5,14 @@
     'category': 'Tools',
     'author': 'Tu Nombre',
     'website': 'https://tusitio.com',
-    'depends': ['base', 'web','mail'],
+    'depends': ['base', 'web', 'mail', 'account', 'l10n_ar_percepciones', 'account_withholding_automatic'],
     'data': [
         'security/ir.model.access.csv',
+        'data/ret_tax_data.xml',
         'views/view.xml',
         'views/padron_arba_view.xml',
         'views/exportcsv.xml',
+        'views/exportret.xml',
         'data/padron.xml',
     ],
     'assets': {

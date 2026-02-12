@@ -1,0 +1,108 @@
+<odoo>
+  <!-- Form view -->
+  <record id="view_arba_exportret_form" model="ir.ui.view">
+    <field name="name">arba.exportret.form</field>
+    <field name="model">arba.exportret</field>
+    <field name="arch" type="xml">
+      <form string="Exportar TXT Retenciones IIBB ARBA">
+        <header>
+          <button name="action_generate_txt" type="object"
+                  string="Generar TXT" class="btn-primary"
+                  data-hotkey="g" invisible="state == 'done'"/>
+          <field name="state" widget="statusbar" statusbar_visible="draft,done"/>
+        </header>
+        <sheet>
+          <div class="text-center mt16 mb4">
+            <field name="name" placeholder="Ej: Retenciones Julio 2025"
+                   nolabel="1" class="fw-bold"
+                   options="{'no_open': True}"/>
+          </div>
+          <div class="d-flex justify-content-center mt16">
+            <table class="table table-sm table-bordered w-auto"
+                   style="background-color: #f8f9fa;">
+              <tr>
+                <td class="pe-3">
+                  <label for="periodo_mes"/>
+                  <field name="periodo_mes"/>
+                </td>
+                <td class="ps-3">
+                  <label for="periodo_anio"/>
+                  <field name="periodo_anio"/>
+                </td>
+              </tr>
+              <tr invisible="state != 'done'">
+                <td class="pe-3 text-center" colspan="2">
+                  <field name="download_link" nolabel="1"/>
+                </td>
+              </tr>
+            </table>
+          </div>
+        </sheet>
+      </form>
+    </field>
+  </record>
+
+  <!-- Tree view -->
+  <record id="view_arba_exportret_tree" model="ir.ui.view">
+    <field name="name">arba.exportret.tree</field>
+    <field name="model">arba.exportret</field>
+    <field name="arch" type="xml">
+      <tree string="Exportaciones TXT Retenciones">
+        <field name="name"/>
+        <field name="periodo_mes"/>
+        <field name="periodo_anio"/>
+        <field name="state"/>
+      </tree>
+    </field>
+  </record>
+
+  <!-- Kanban view -->
+  <record id="view_arba_exportret_kanban" model="ir.ui.view">
+    <field name="name">arba.exportret.kanban</field>
+    <field name="model">arba.exportret</field>
+    <field name="arch" type="xml">
+      <kanban>
+        <field name="name"/>
+        <field name="periodo_mes"/>
+        <field name="periodo_anio"/>
+        <field name="state"/>
+        <templates>
+          <t t-name="kanban-box">
+            <div class="oe_kanban_card">
+              <t t-if="record.state.raw_value == 'done'">
+                <div class="oe_kanban_badge badge badge-success">
+                  <field name="state"/>
+                </div>
+              </t>
+              <t t-if="record.state.raw_value == 'draft'">
+                <div class="oe_kanban_badge badge badge-secondary">
+                  <field name="state"/>
+                </div>
+              </t>
+              <div class="oe_kanban_details">
+                <strong><field name="name"/></strong>
+                <div>Mes: <field name="periodo_mes"/></div>
+                <div>Año: <field name="periodo_anio"/></div>
+              </div>
+            </div>
+          </t>
+        </templates>
+      </kanban>
+    </field>
+  </record>
+
+  <!-- Action -->
+  <record id="action_arba_exportret" model="ir.actions.act_window">
+    <field name="name">Exportar TXT Retenciones</field>
+    <field name="res_model">arba.exportret</field>
+    <field name="view_mode">tree,kanban,form</field>
+    <field name="target">current</field>
+  </record>
+
+  <!-- Menu item bajo ARBA -->
+  <menuitem id="menu_arba_exportret"
+            name="Exportar TXT Retenciones"
+            parent="menu_arba_root"
+            action="action_arba_exportret"
+            sequence="30"/>
+</odoo>
