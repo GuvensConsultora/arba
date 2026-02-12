@@ -13,6 +13,7 @@
         'views/padron_arba_view.xml',
         'views/exportcsv.xml',
         'views/exportret.xml',
+        'views/res_company_view.xml',
         'data/padron.xml',
     ],
     'assets': {
