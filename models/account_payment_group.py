@@ -1,4 +1,4 @@
-from odoo import models, fields
+from odoo import models, fields, _
 from markupsafe import Markup
 
 
@@ -9,6 +9,35 @@ class AccountPaymentGroup(models.Model):
     del Payment Group, y luego ejecuta el cálculo real.
     """
     _inherit = 'account.payment.group'
+
+    def action_payment_sent(self):
+        """Fix: OCA usa default_res_id (deprecated en Odoo 17).
+        Por qué: mail.compose.message requiere default_res_ids (list) en v17.
+        """
+        self.ensure_one()
+        template = self.env.ref(
+            'account_payment_group.email_template_edi_payment_group', False)
+        compose_form = self.env.ref(
+            'mail.email_compose_message_wizard_form', False)
+        ctx = dict(
+            default_model='account.payment.group',
+            # Por qué: Odoo 17 reemplazó default_res_id por default_res_ids (list)
+            default_res_ids=self.ids,
+            default_use_template=bool(template),
+            default_template_id=template and template.id or False,
+            default_composition_mode='comment',
+            mark_payment_as_sent=True,
+        )
+        return {
+            'name': _('Compose Email'),
+            'type': 'ir.actions.act_window',
+            'view_mode': 'form',
+            'res_model': 'mail.compose.message',
+            'views': [(compose_form.id, 'form')],
+            'view_id': compose_form.id,
+            'target': 'new',
+            'context': ctx,
+        }
 
     def compute_withholdings(self):
         for rec in self:
