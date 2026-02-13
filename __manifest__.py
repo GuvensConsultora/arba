@@ -21,6 +21,7 @@
         'data/padron.xml',
         'views/account_tax_view.xml',
         'report/report_withholding_certificate.xml',
+        'report/report_payment_group.xml',
     ],
     'assets': {
         'web.assets_frontend': [

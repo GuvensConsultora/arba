@@ -1,0 +1,69 @@
+<?xml version="1.0" encoding="utf-8"?>
+<odoo>
+    <data>
+
+        <!-- Override tabla comprobantes del recibo: agrega importe original y saldo pendiente.
+             Por qué: el recibo OCA solo muestra lo abonado, pero el usuario necesita
+             ver importe original y saldo pendiente por factura + totales. -->
+
+        <template id="report_payment_group_invoice_detail"
+                  inherit_id="l10n_ar_report_payment_group.report_payment_group_document">
+            <xpath expr="(//table[@class='table'])[2]" position="replace">
+                <table class="table">
+                    <thead>
+                        <tr class="border-black">
+                            <th>Fecha</th>
+                            <th>Comprobante</th>
+                            <th class="text-right">Importe</th>
+                            <th class="text-right">Abonado</th>
+                            <th class="text-right">Saldo</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        <t t-set="aplicado_total" t-value="0"/>
+                        <t t-set="importe_total" t-value="0"/>
+                        <t t-set="saldo_total" t-value="0"/>
+                        <tr t-foreach="o.matched_move_line_ids" t-as="l">
+                            <td><span t-field="l.date"/></td>
+                            <td><span t-field="l.move_id.name"/></td>
+                            <td class="text-right">
+                                <span t-field="l.move_id.amount_total"
+                                      t-options='{"widget": "monetary", "display_currency": o.currency_id}'/>
+                            </td>
+                            <td class="text-right">
+                                <t t-set="matched_amt" t-value="l.with_context({'payment_group_id': o.id}).payment_group_matched_amount"/>
+                                <span t-esc="matched_amt"
+                                      t-options='{"widget": "monetary", "display_currency": o.currency_id}'/>
+                            </td>
+                            <td class="text-right">
+                                <span t-field="l.move_id.amount_residual"
+                                      t-options='{"widget": "monetary", "display_currency": o.currency_id}'/>
+                            </td>
+                            <t t-set="aplicado_total" t-value="aplicado_total + matched_amt"/>
+                            <t t-set="importe_total" t-value="importe_total + l.move_id.amount_total"/>
+                            <t t-set="saldo_total" t-value="saldo_total + l.move_id.amount_residual"/>
+                        </tr>
+                    </tbody>
+                    <tfoot>
+                        <tr class="border-black">
+                            <td colspan="2"><strong>Total</strong></td>
+                            <td class="text-right">
+                                <strong><span t-esc="importe_total"
+                                      t-options='{"widget": "monetary", "display_currency": o.currency_id}'/></strong>
+                            </td>
+                            <td class="text-right">
+                                <strong><span t-esc="aplicado_total"
+                                      t-options='{"widget": "monetary", "display_currency": o.currency_id}'/></strong>
+                            </td>
+                            <td class="text-right">
+                                <strong><span t-esc="saldo_total"
+                                      t-options='{"widget": "monetary", "display_currency": o.currency_id}'/></strong>
+                            </td>
+                        </tr>
+                    </tfoot>
+                </table>
+            </xpath>
+        </template>
+
+    </data>
+</odoo>
