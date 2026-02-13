@@ -117,7 +117,7 @@
                                 <span>Según escala</span>
                             </t>
                             <t t-else="">
-                                <span t-esc="'%.2f %%' % alicuota"/>
+                                <span t-esc="'{:.2f} %'.format(alicuota)"/>
                             </t>
                         </div>
                         <div class="col-4 mt-2">
