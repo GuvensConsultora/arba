@@ -3,11 +3,28 @@ from odoo import models
 
 
 class AccountPayment(models.Model):
-    """Helpers para el template QWeb del certificado de retención.
-    Por qué: el template QWeb no puede ejecutar lógica compleja,
-    estos métodos encapsulan la obtención de datos legales.
+    """Helpers para el template QWeb del certificado de retención +
+    override de numeración para usar la secuencia del diario.
     """
     _inherit = 'account.payment'
+
+    # ── Numeración desde secuencia del diario ─────────────────
+
+    def post(self):
+        """Override: asigna withholding_number desde la secuencia del diario
+        configurado en withholding_journal_id del impuesto.
+        Por qué: el OCA original usa tax.withholding_sequence_id, pero
+        el usuario quiere que el nro de certificado venga del diario
+        de retención (ej: secuencia del diario "Retenciones IIBB ARBA").
+        """
+        for payment in self.filtered(
+            lambda p: p.tax_withholding_id and not p.withholding_number
+        ):
+            # Prioridad: secuencia del diario configurado en el impuesto
+            journal = payment.tax_withholding_id.withholding_journal_id
+            if journal and journal.sequence_id:
+                payment.withholding_number = journal.sequence_id.next_by_id()
+        return super().post()
 
     # ── Tipo de retención ──────────────────────────────────────
 
