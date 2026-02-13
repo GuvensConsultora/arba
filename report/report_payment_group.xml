@@ -8,7 +8,7 @@
 
         <template id="report_payment_group_invoice_detail"
                   inherit_id="l10n_ar_report_payment_group.report_payment_group_document">
-            <xpath expr="(//table[@class='table'])[2]" position="replace">
+            <xpath expr="//table[.//th[@colspan='5']]" position="replace">
                 <table class="table">
                     <thead>
                         <tr class="border-black">
