@@ -1,3 +1,4 @@
+import base64
 from odoo import models, fields, _
 from markupsafe import Markup
 
@@ -11,21 +12,26 @@ class AccountPaymentGroup(models.Model):
     _inherit = 'account.payment.group'
 
     def action_payment_sent(self):
-        """Fix: OCA usa default_res_id (deprecated en Odoo 17).
-        Por qué: mail.compose.message requiere default_res_ids (list) en v17.
+        """Enviar por email: adjunta Orden de Pago + certificados de retención.
+        Por qué: el OCA solo adjunta el recibo. El usuario necesita enviar
+        al proveedor todos los comprobantes juntos en un solo email.
         """
         self.ensure_one()
-        template = self.env.ref(
-            'account_payment_group.email_template_edi_payment_group', False)
+        template = self.env.ref('arba.email_template_payment_group', False)
         compose_form = self.env.ref(
             'mail.email_compose_message_wizard_form', False)
+
+        # Generar adjuntos: Orden de Pago + Certificados de Retención
+        attachment_ids = self._generate_payment_attachments()
+
         ctx = dict(
             default_model='account.payment.group',
-            # Por qué: Odoo 17 reemplazó default_res_id por default_res_ids (list)
             default_res_ids=self.ids,
             default_use_template=bool(template),
             default_template_id=template and template.id or False,
             default_composition_mode='comment',
+            # Por qué: adjuntos pre-generados para que aparezcan en el wizard
+            default_attachment_ids=attachment_ids,
             mark_payment_as_sent=True,
         )
         return {
@@ -38,6 +44,55 @@ class AccountPaymentGroup(models.Model):
             'target': 'new',
             'context': ctx,
         }
+
+    def _generate_payment_attachments(self):
+        """Genera PDFs de Orden de Pago + certificados y devuelve lista de IDs.
+        Por qué: mail.compose.message necesita ir.attachment ya creados
+        para mostrarlos en el wizard antes de enviar.
+        """
+        self.ensure_one()
+        Attachment = self.env['ir.attachment']
+        attachment_ids = []
+
+        # 1. PDF Orden de Pago (recibo del payment group)
+        report_pg = self.env.ref(
+            'l10n_ar_report_payment_group.account_payment_group_report', False)
+        if report_pg:
+            pdf_content, _ = report_pg._render_qweb_pdf(
+                report_pg.report_name, res_ids=self.ids)
+            att = Attachment.create({
+                'name': 'Orden de Pago - %s.pdf' % (self.display_name or ''),
+                'type': 'binary',
+                'datas': base64.b64encode(pdf_content),
+                'res_model': 'account.payment.group',
+                'res_id': self.id,
+                'mimetype': 'application/pdf',
+            })
+            attachment_ids.append(att.id)
+
+        # 2. PDF Certificado de Retención por cada pago de retención
+        # Por qué: cada retención genera un certificado independiente
+        withholding_payments = self.payment_ids.filtered(
+            lambda p: p.tax_withholding_id)
+        if withholding_payments:
+            report_wh = self.env.ref(
+                'l10n_ar_report_withholding.action_payment_withholdings', False)
+            if report_wh:
+                for payment in withholding_payments:
+                    pdf_content, _ = report_wh._render_qweb_pdf(
+                        report_wh.report_name, res_ids=payment.ids)
+                    att = Attachment.create({
+                        'name': 'Certificado Retención - %s.pdf' % (
+                            payment.withholding_number or payment.name),
+                        'type': 'binary',
+                        'datas': base64.b64encode(pdf_content),
+                        'res_model': 'account.payment',
+                        'res_id': payment.id,
+                        'mimetype': 'application/pdf',
+                    })
+                    attachment_ids.append(att.id)
+
+        return attachment_ids
 
     def compute_withholdings(self):
         for rec in self:

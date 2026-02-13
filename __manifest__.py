@@ -19,6 +19,7 @@
         'views/exportret.xml',
         'views/res_company_view.xml',
         'data/padron.xml',
+        'data/mail_template_payment_group.xml',
         'views/account_tax_view.xml',
         'report/report_withholding_certificate.xml',
         'report/report_payment_group.xml',

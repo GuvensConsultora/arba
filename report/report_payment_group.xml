@@ -2,12 +2,24 @@
 <odoo>
     <data>
 
-        <!-- Override tabla comprobantes del recibo: agrega importe original y saldo pendiente.
-             Por qué: el recibo OCA solo muestra lo abonado, pero el usuario necesita
-             ver importe original y saldo pendiente por factura + totales. -->
+        <!-- Override recibo Payment Group:
+             1. Título "RECIBO" → "ORDEN DE PAGO"
+             2. Tabla comprobantes con importe/abonado/saldo + totales -->
 
         <template id="report_payment_group_invoice_detail"
                   inherit_id="l10n_ar_report_payment_group.report_payment_group_document">
+
+            <!-- Cambiar card header "REC" → "OP" -->
+            <xpath expr="//div[hasclass('card-header')]" position="replace">
+                <div class="card-header" style="font-size: 48px;padding:0px;">OP</div>
+            </xpath>
+
+            <!-- Cambiar título "RECIBO" → "ORDEN DE PAGO" -->
+            <xpath expr="//h3[contains(text(),'RECIBO')]" position="replace">
+                <h3>ORDEN DE PAGO</h3>
+            </xpath>
+
+            <!-- Reemplazar tabla comprobantes con columnas importe/abonado/saldo -->
             <xpath expr="//table[.//th[@colspan='5']]" position="replace">
                 <table class="table">
                     <thead>
@@ -63,6 +75,7 @@
                     </tfoot>
                 </table>
             </xpath>
+
         </template>
 
     </data>
