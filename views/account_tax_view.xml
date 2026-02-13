@@ -9,8 +9,8 @@
             <field name="model">account.tax</field>
             <field name="inherit_id" ref="account_withholding_automatic.view_tax_form"/>
             <field name="arch" type="xml">
-                <xpath expr="//field[@name='withholding_accumulated_payments']" position="before">
-                    <field name="withholding_journal_id"/>
+                <xpath expr="//group[@name='withholdings']" position="inside">
+                    <field name="withholding_journal_id" invisible="withholding_type == 'none'"/>
                 </xpath>
             </field>
         </record>
