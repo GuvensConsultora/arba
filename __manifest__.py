@@ -5,7 +5,11 @@
     'category': 'Tools',
     'author': 'Tu Nombre',
     'website': 'https://tusitio.com',
-    'depends': ['base', 'web', 'mail', 'account', 'l10n_ar_percepciones', 'account_withholding_automatic'],
+    'depends': [
+        'base', 'web', 'mail', 'account',
+        'l10n_ar_percepciones', 'account_withholding_automatic',
+        'l10n_ar_report_withholding', 'l10n_ar_report_payment_group',
+    ],
     'data': [
         'security/ir.model.access.csv',
         'data/ret_tax_data.xml',
@@ -15,6 +19,7 @@
         'views/exportret.xml',
         'views/res_company_view.xml',
         'data/padron.xml',
+        'report/report_withholding_certificate.xml',
     ],
     'assets': {
         'web.assets_frontend': [

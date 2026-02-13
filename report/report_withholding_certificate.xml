@@ -1,0 +1,219 @@
+<?xml version="1.0" encoding="utf-8"?>
+<odoo>
+    <data>
+
+        <!-- Template principal del certificado de retención.
+             Por qué: override completo del template OCA roto que usa
+             reconciled_invoice_ids y _get_invoice_payment_amount (no existen).
+             Patrón: template nuevo + redirección del ir.actions.report. -->
+
+        <template id="report_withholding_certificate_document">
+            <t t-call="web.external_layout">
+                <t t-set="o" t-value="o.with_context(lang=lang)"/>
+                <div class="page" style="font-size: 13px;">
+
+                    <!-- ═══ TÍTULO ═══ -->
+                    <div class="text-center mt-4 mb-4">
+                        <h2 style="border-bottom: 2px solid #000; padding-bottom: 8px;">
+                            <strong>CERTIFICADO DE RETENCIÓN</strong>
+                        </h2>
+                        <h4><t t-esc="o.get_withholding_type_label()"/></h4>
+                    </div>
+
+                    <!-- ═══ SECCIÓN 1: AGENTE DE RETENCIÓN ═══ -->
+                    <div class="row mb-3" style="border: 1px solid #ccc; padding: 12px; border-radius: 4px;">
+                        <div class="col-12">
+                            <h5 style="border-bottom: 1px solid #999; margin-bottom: 8px;">
+                                <strong>AGENTE DE RETENCIÓN</strong>
+                            </h5>
+                        </div>
+                        <div class="col-6">
+                            <strong>Razón Social:</strong>
+                            <span t-field="o.company_id.name"/>
+                        </div>
+                        <div class="col-6">
+                            <strong>CUIT:</strong>
+                            <span t-field="o.company_id.vat"/>
+                        </div>
+                        <div class="col-6 mt-1">
+                            <strong>Condición IVA:</strong>
+                            <span t-field="o.company_id.partner_id.l10n_ar_afip_responsibility_type_id"/>
+                        </div>
+                        <div class="col-6 mt-1">
+                            <strong>Inicio Actividades:</strong>
+                            <span t-field="o.company_id.l10n_ar_afip_start_date"/>
+                        </div>
+                        <div class="col-12 mt-1">
+                            <strong>Domicilio:</strong>
+                            <span t-field="o.company_id.partner_id"
+                                  t-options='{"widget": "contact", "fields": ["address"], "no_marker": True}'/>
+                        </div>
+                        <!-- Nro IIBB solo para retenciones IIBB -->
+                        <t t-if="o.is_iibb_withholding()">
+                            <div class="col-6 mt-1">
+                                <strong>Nro. Ingresos Brutos:</strong>
+                                <span t-field="o.company_id.l10n_ar_gross_income_number"/>
+                            </div>
+                        </t>
+                    </div>
+
+                    <!-- ═══ SECCIÓN 2: SUJETO RETENIDO ═══ -->
+                    <div class="row mb-3" style="border: 1px solid #ccc; padding: 12px; border-radius: 4px;">
+                        <div class="col-12">
+                            <h5 style="border-bottom: 1px solid #999; margin-bottom: 8px;">
+                                <strong>SUJETO RETENIDO</strong>
+                            </h5>
+                        </div>
+                        <div class="col-6">
+                            <strong>
+                                <t t-if="o.partner_type == 'supplier'">Proveedor:</t>
+                                <t t-else="">Cliente:</t>
+                            </strong>
+                            <span t-field="o.partner_id.name"/>
+                        </div>
+                        <div class="col-6">
+                            <strong>CUIT:</strong>
+                            <span t-field="o.partner_id.vat"/>
+                        </div>
+                        <div class="col-6 mt-1">
+                            <strong>Condición IVA:</strong>
+                            <span t-field="o.partner_id.l10n_ar_afip_responsibility_type_id"/>
+                        </div>
+                        <div class="col-6 mt-1">
+                            <strong>Domicilio:</strong>
+                            <span t-field="o.partner_id"
+                                  t-options='{"widget": "contact", "fields": ["address"], "no_marker": True}'/>
+                        </div>
+                    </div>
+
+                    <!-- ═══ SECCIÓN 3: DATOS DE LA RETENCIÓN ═══ -->
+                    <div class="row mb-3" style="border: 1px solid #ccc; padding: 12px; border-radius: 4px;">
+                        <div class="col-12">
+                            <h5 style="border-bottom: 1px solid #999; margin-bottom: 8px;">
+                                <strong>DATOS DE LA RETENCIÓN</strong>
+                            </h5>
+                        </div>
+                        <div class="col-6">
+                            <strong>Nro. Certificado:</strong>
+                            <span t-field="o.withholding_number"/>
+                        </div>
+                        <div class="col-6">
+                            <strong>Fecha:</strong>
+                            <span t-field="o.date"/>
+                        </div>
+                        <div class="col-12 mt-1">
+                            <strong>Impuesto:</strong>
+                            <span t-field="o.tax_withholding_id"/>
+                        </div>
+                        <div class="col-4 mt-2">
+                            <strong>Base Imponible:</strong><br/>
+                            <span t-field="o.withholdable_base_amount"
+                                  t-options="{'widget': 'monetary', 'display_currency': o.currency_id}"/>
+                        </div>
+                        <div class="col-4 mt-2">
+                            <strong>Alícuota:</strong><br/>
+                            <t t-set="alicuota" t-value="o.get_withholding_alicuota()"/>
+                            <t t-if="alicuota == -1">
+                                <span>Según escala</span>
+                            </t>
+                            <t t-else="">
+                                <span t-esc="'%.2f %%' % alicuota"/>
+                            </t>
+                        </div>
+                        <div class="col-4 mt-2">
+                            <strong>Importe Retenido:</strong><br/>
+                            <span t-field="o.amount"
+                                  t-options="{'widget': 'monetary', 'display_currency': o.currency_id}"/>
+                        </div>
+
+                        <!-- Régimen: condicional según tipo -->
+                        <div class="col-12 mt-2">
+                            <strong>Régimen:</strong>
+                            <t t-if="o.is_iibb_withholding()">
+                                <span>Régimen General - IIBB Buenos Aires</span>
+                            </t>
+                            <t t-if="o.is_ganancias_withholding()">
+                                <span t-esc="o.get_regimen_ganancias_label()"/>
+                            </t>
+                        </div>
+
+                        <!-- Observaciones -->
+                        <t t-if="o.communication">
+                            <div class="col-12 mt-2">
+                                <strong>Observaciones:</strong>
+                                <span t-field="o.communication"/>
+                            </div>
+                        </t>
+                    </div>
+
+                    <!-- ═══ SECCIÓN 4: COMPROBANTES ASOCIADOS ═══ -->
+                    <t t-set="invoices" t-value="o.get_withholding_invoices()"/>
+                    <t t-if="invoices">
+                        <div class="mb-3">
+                            <h5 style="border-bottom: 1px solid #999; margin-bottom: 8px;">
+                                <strong>COMPROBANTES ASOCIADOS</strong>
+                            </h5>
+                            <table class="table table-sm table-bordered">
+                                <thead style="background-color: #f0f0f0;">
+                                    <tr>
+                                        <th>Fecha</th>
+                                        <th>Comprobante</th>
+                                        <th>Referencia</th>
+                                        <th class="text-end">Monto Original</th>
+                                        <th class="text-end">Saldo</th>
+                                    </tr>
+                                </thead>
+                                <tbody>
+                                    <tr t-foreach="invoices" t-as="inv">
+                                        <td><span t-field="inv.invoice_date"/></td>
+                                        <td><span t-field="inv.name"/></td>
+                                        <td><span t-field="inv.ref"/></td>
+                                        <td class="text-end">
+                                            <span t-field="inv.amount_total"
+                                                  t-options="{'widget': 'monetary', 'display_currency': inv.currency_id}"/>
+                                        </td>
+                                        <td class="text-end">
+                                            <span t-field="inv.amount_residual"
+                                                  t-options="{'widget': 'monetary', 'display_currency': inv.currency_id}"/>
+                                        </td>
+                                    </tr>
+                                </tbody>
+                            </table>
+                        </div>
+                    </t>
+
+                    <!-- ═══ SECCIÓN 5: FIRMA ═══ -->
+                    <div class="row mt-5">
+                        <div class="col-6 offset-6 text-center">
+                            <div style="border-top: 1px solid #000; padding-top: 4px; margin-top: 80px;">
+                                Firma y Sello del Agente de Retención
+                            </div>
+                        </div>
+                    </div>
+
+                </div>
+            </t>
+        </template>
+
+        <!-- Template wrapper que itera los docs.
+             Patrón: QWeb report estándar Odoo (wrapper + document). -->
+        <template id="report_withholding_certificate">
+            <t t-call="web.html_container">
+                <t t-foreach="docs" t-as="o">
+                    <t t-call="arba.report_withholding_certificate_document"
+                       t-lang="o.partner_id.lang"/>
+                </t>
+            </t>
+        </template>
+
+        <!-- Override del ir.actions.report existente de OCA.
+             Por qué: redirige la acción de impresión al template nuevo
+             sin tocar el módulo OCA original. -->
+        <record id="l10n_ar_report_withholding.action_payment_withholdings" model="ir.actions.report">
+            <field name="report_name">arba.report_withholding_certificate</field>
+            <field name="report_file">arba.report_withholding_certificate</field>
+            <field name="print_report_name">'Certificado Retención - %s' % (object.withholding_number or object.name)</field>
+        </record>
+
+    </data>
+</odoo>
