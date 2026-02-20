@@ -6,7 +6,7 @@
     'author': 'Tu Nombre',
     'website': 'https://tusitio.com',
     'depends': [
-        'base', 'web', 'mail', 'account',
+        'base', 'web', 'mail', 'account', 'sale',
         'l10n_ar_percepciones', 'account_withholding_automatic',
         'l10n_ar_report_withholding', 'l10n_ar_report_payment_group',
     ],
