@@ -285,16 +285,26 @@ class ArchivoComprimido(models.Model):
         self._actualizar_retenciones_partners()
 
     def _posiciones_fiscales(self):
-        """Crea las posiciones fiscales nuevas, si no están creadas teniendo en cuenta la tasa del padrón de percepciones."""
+        """Crea las posiciones fiscales nuevas, si no están creadas teniendo en cuenta la tasa del padrón de percepciones.
+        Por qué: filtramos por company_id para evitar que se mezclen taxes/posiciones fiscales
+        de distintas empresas en entornos multi-company."""
+        company = self.env.company
         # Buscar el grupo de impuestos "Perc IIBB ARBA"
         grupo_perc = self.env['account.tax.group'].search([('name', '=', 'Perc IIBB ARBA')], limit=1)
-        # Obtener todos los impuestos que pertenecen a ese grupo tipo ventas
-        impuesto_ids = self.env['account.tax'].search([('tax_group_id', '=', grupo_perc.id),('type_tax_use', '=', 'sale')]).ids
+        # Obtener todos los impuestos que pertenecen a ese grupo tipo ventas DE ESTA EMPRESA
+        # Por qué: sin filtro de company_id se traen taxes de todas las empresas → conflicto multi-company
+        impuesto_ids = self.env['account.tax'].search([
+            ('tax_group_id', '=', grupo_perc.id),
+            ('type_tax_use', '=', 'sale'),
+            ('company_id', '=', company.id),
+        ]).ids
         # Obtener los objetos de los impuestos que pertenecen a este grupo
         res_imp_ids =self.env['account.tax'].browse(impuesto_ids)
-        # Buscar líneas de mapeo fiscal que ya usan esos impuestos como destino
+        # Buscar líneas de mapeo fiscal que ya usan esos impuestos como destino (misma empresa)
+        # Por qué: position_id.company_id filtra posiciones fiscales de la empresa actual
         lineas_mapeo = self.env['account.fiscal.position.tax'].search([
-            ('tax_dest_id', 'in', impuesto_ids)
+            ('tax_dest_id', 'in', impuesto_ids),
+            ('position_id.company_id', '=', company.id),
         ])
         # Extraer los IDs de impuestos ya utilizados
         impuestos_usados = lineas_mapeo.mapped('tax_dest_id.id')
@@ -332,25 +342,39 @@ class ArchivoComprimido(models.Model):
         self.message_post(body=msje)
 
     def _posicion_impositiva_contacto(self):
-        """Asignamos la posiciones fiscales a los contactos que corresponden"""
-        obj_contactos=self.env['res.partner'].search([('state_id','=',554)])
+        """Asigna posiciones fiscales a contactos de Buenos Aires.
+        Por qué: filtramos taxes y posiciones fiscales por company_id para que cada empresa
+        tenga su propia asignación. property_account_position_id es company_dependent,
+        así que el write() guarda el valor solo para self.env.company."""
+        company = self.env.company
+        obj_contactos = self.env['res.partner'].search([('state_id', '=', 554)])
         for obj_contacto in obj_contactos:
-            # Busco la tasa de perc para este cuit y busco la posición fiscal y la escribo en
-            
-            # el campo posición fiscal del contacto.
-            var_cuit =  (obj_contacto.vat or '').replace('-', '')
-            tasa_perc = self.env['arba.padron'].search([('cuit','=',var_cuit)], limit=1) #Busco por nro de cuit la tasa asignada en el padrón
-            id_imp = self.env['account.tax'].search([('amount', '=', tasa_perc.tasa),('type_tax_use', '=', 'sale')], limit=1) # Busco el impuesto en función de la tasa
-            line_perc = self.env['account.fiscal.position.tax'].search([('tax_dest_id', '=', id_imp.id)]) # Busco la posición fiscal que surge de la retención.
+            # Busco la tasa de percepción para este CUIT en el padrón
+            var_cuit = (obj_contacto.vat or '').replace('-', '')
+            tasa_perc = self.env['arba.padron'].search([('cuit', '=', var_cuit)], limit=1)
+            # Busco el impuesto filtrado por empresa actual
+            # Por qué: sin company_id el search puede devolver un tax de otra empresa
+            # → la posición fiscal resultante pertenece a esa otra empresa → conflicto multi-company
+            id_imp = self.env['account.tax'].search([
+                ('amount', '=', tasa_perc.tasa),
+                ('type_tax_use', '=', 'sale'),
+                ('company_id', '=', company.id),
+            ], limit=1)
+            # Busco la posición fiscal que mapea a este impuesto (misma empresa)
+            line_perc = self.env['account.fiscal.position.tax'].search([
+                ('tax_dest_id', '=', id_imp.id),
+                ('position_id.company_id', '=', company.id),
+            ], limit=1)
             if line_perc and line_perc.position_id:
                 obj_contacto.write({'property_account_position_id': line_perc.position_id.id})
-                obj_contacto.message_post(body=f"📌 Se actualizó la posición impositiva a: {line_perc.position_id.name}")
+                obj_contacto.message_post(body=f"Se actualizó la posición impositiva a: {line_perc.position_id.name} ({company.name})")
             else:
-                obj_contacto.message_post(body="⚠️ No se pudo asignar posición impositiva. No se encontró una posición válida.")
-            tasa = obj_contacto.name + str(var_cuit) + "Tasa:  " +  str(tasa_perc) +  str(tasa_perc.tasa) + " Id impuesto: " +  str(id_imp.id) + str(line_perc.position_id.id) +   "\n"
-
-            _logger.info(tasa)
-            #raise UserError(f"Listados de ids de contactos de Buenos Aires {contactos_ids}  \n {tasas}")
+                obj_contacto.message_post(body=f"No se pudo asignar posición impositiva para {company.name}. No se encontró una posición válida.")
+            _logger.info("%s CUIT:%s Tasa:%s Tax:%s PosFiscal:%s Company:%s",
+                         obj_contacto.name, var_cuit, tasa_perc.tasa,
+                         id_imp.id if id_imp else None,
+                         line_perc.position_id.id if line_perc else None,
+                         company.name)
 
 
     def _actualizar_retenciones_partners(self):
