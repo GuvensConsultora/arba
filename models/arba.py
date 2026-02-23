@@ -44,11 +44,12 @@ class ArchivoComprimido(models.Model):
     archivo = fields.Binary(string="Archivo Zip", required=True)
 
 
-    @api.model
-    def create(self, vals):
-        rec = super().create(vals)
-        rec.guardar_y_procesar_zip()
-        return rec
+    @api.model_create_multi
+    def create(self, vals_list):
+        recs = super().create(vals_list)
+        for rec in recs:
+            rec.guardar_y_procesar_zip()
+        return recs
 
     def convertir_fecha(self, texto):
         try:
