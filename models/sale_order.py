@@ -49,15 +49,16 @@ class SaleOrderLine(models.Model):
 
     @api.model_create_multi
     def create(self, vals_list):
-        for vals in vals_list:
-            self._limpiar_tax_commands(vals)
-        return super().create(vals_list)
+        if not self.env.context.get('_arba_no_reentry'):
+            for vals in vals_list:
+                self._limpiar_tax_commands(vals)
+        return super(SaleOrderLine, self.with_context(_arba_no_reentry=True)).create(vals_list)
 
     def write(self, vals):
-        if 'tax_id' in vals:
+        if 'tax_id' in vals and not self.env.context.get('_arba_no_reentry'):
             vals = dict(vals)  # Copia para no mutar el original
             self._limpiar_tax_commands(vals)
-        return super().write(vals)
+        return super(SaleOrderLine, self.with_context(_arba_no_reentry=True)).write(vals)
 
     def _limpiar_tax_commands(self, vals):
         """Filtra comandos Many2many de tax_id para descartar taxes de otra empresa.
@@ -113,7 +114,9 @@ class SaleOrderLine(models.Model):
     # Por qué: seguridad adicional para taxes que llegan por compute
 
     def _compute_tax_id(self):
-        super()._compute_tax_id()
+        # Por qué: _arba_no_reentry corta el ciclo compute→write→compute
+        # que genera loop infinito al filtrar taxes de otra empresa
+        super(SaleOrderLine, self.with_context(_arba_no_reentry=True))._compute_tax_id()
         for line in self:
             if line.tax_id and line.company_id:
                 taxes_ok = line.tax_id.filtered(lambda t: t.company_id == line.company_id)
