@@ -297,6 +297,135 @@ class AccountPaymentGroup(models.Model):
                     else:
                         msg += Markup('<b style="color:red;font-size:14px;">'
                                       'RETENCIÓN = 0 → No se crea pago</b>')
+
+                        # Por qué: cuando la retención da 0, el usuario necesita
+                        # saber qué parametrizar. Armamos checklist diagnóstica
+                        # evaluando cada condición que pudo fallar.
+                        msg += Markup('</div>')
+                        msg += Markup('<div style="background:#fff3cd;padding:10px;'
+                                      'border-radius:6px;margin-top:8px;'
+                                      'border-left:4px solid #ffc107;">')
+                        msg += Markup('<b style="color:#856404;">Checklist de parametrización</b><br/>')
+                        msg += Markup('<span style="font-size:12px;color:#664d03;">'
+                                      'Revisá estos puntos para que la retención se calcule:</span><br/><br/>')
+
+                        # Check 1: Padrón ARBA cargado
+                        padron_count = self.env['arba.padron'].search_count([
+                            ('tipo', '=like', 'R%'),
+                        ])
+                        padron_partner = self.env['arba.padron'].search([
+                            ('cuit', '=', cuit), ('tipo', '=like', 'R%'),
+                        ], limit=1)
+                        if padron_count == 0:
+                            msg += Markup('<span style="color:red;">&#10060;</span> '
+                                          '<b>1. Subir padrón ARBA:</b> '
+                                          'No hay registros de retención cargados. '
+                                          'Ir a <i>ARBA → Archivo Comprimido</i> → subir ZIP del padrón '
+                                          '(debe contener archivo Ret*.txt)<br/>')
+                        elif not padron_partner:
+                            msg += Markup('<span style="color:orange;">&#9888;</span> '
+                                          '<b>1. Padrón cargado</b> (%s registros Ret), '
+                                          'pero CUIT %s <b>no figura</b>. '
+                                          'Verificar que el padrón sea el vigente del período.<br/>') % (
+                                              padron_count, cuit)
+                        else:
+                            msg += Markup('<span style="color:green;">&#9989;</span> '
+                                          '<b>1. Padrón OK:</b> CUIT %s encontrado '
+                                          'con tasa %s%%<br/>') % (cuit, padron_partner.tasa)
+
+                        # Check 2: Perception cargada en el partner
+                        perc_partner = self.env['res.partner.perception'].search([
+                            ('partner_id', '=', partner.id),
+                            ('tax_id', '=', tax.id),
+                        ], limit=1)
+                        if not perc_partner:
+                            msg += Markup('<span style="color:red;">&#10060;</span> '
+                                          '<b>2. Cargar alícuota en partner:</b> '
+                                          '%s no tiene alícuota para "%s". ') % (partner.name, tax.name)
+                            if padron_partner:
+                                msg += Markup('El padrón tiene tasa %s%%. '
+                                              'Ejecutar <i>"Actualizar Posición Impositiva"</i> '
+                                              'en Archivo Comprimido para cargarla automáticamente.<br/>') % padron_partner.tasa
+                            else:
+                                msg += Markup('Cargar manualmente en el partner → '
+                                              'pestaña <i>Percepciones/Retenciones</i> → '
+                                              'agregar línea con impuesto "%s" y el porcentaje.<br/>') % tax.name
+                        elif perc_partner.percent == 0:
+                            msg += Markup('<span style="color:orange;">&#9888;</span> '
+                                          '<b>2. Alícuota en 0%%:</b> '
+                                          'El partner tiene la línea pero con porcentaje 0. '
+                                          'Editar en partner → <i>Percepciones/Retenciones</i>.<br/>')
+                        else:
+                            msg += Markup('<span style="color:green;">&#9989;</span> '
+                                          '<b>2. Alícuota OK:</b> %s%% configurada<br/>') % perc_partner.percent
+
+                        # Check 3: Retenciones automáticas en la compañía
+                        if rec.company_id.automatic_withholdings:
+                            msg += Markup('<span style="color:green;">&#9989;</span> '
+                                          '<b>3. Retenciones automáticas:</b> activado<br/>')
+                        else:
+                            msg += Markup('<span style="color:red;">&#10060;</span> '
+                                          '<b>3. Activar retenciones automáticas:</b> '
+                                          'Ir a <i>Ajustes → Contabilidad</i> → '
+                                          'activar "Retenciones Automáticas"<br/>')
+
+                        # Check 4: Diario de retenciones correcto
+                        try:
+                            pm_wh = self.env.ref(
+                                'account_withholding.account_payment_method_out_withholding')
+                            wh_journals = self.env['account.journal'].search([
+                                ('company_id', '=', tax.company_id.id),
+                                ('type', '=', 'cash'),
+                            ])
+                            wh_journal = None
+                            for j in wh_journals:
+                                if pm_wh in j.outbound_payment_method_line_ids.mapped('payment_method_id'):
+                                    wh_journal = j
+                                    break
+                            if wh_journal:
+                                # Por qué: un diario genérico (ej: "Cheques Rechazados")
+                                # técnicamente funciona pero confunde al usuario
+                                name_lower = wh_journal.name.lower()
+                                is_suspicious = any(w in name_lower for w in [
+                                    'cheque', 'banco', 'efectivo', 'caja',
+                                ])
+                                if is_suspicious:
+                                    msg += Markup('<span style="color:orange;">&#9888;</span> '
+                                                  '<b>4. Diario:</b> "%s" tiene método Withholding '
+                                                  'pero no parece ser un diario dedicado. '
+                                                  'Recomendación: crear diario tipo Cash llamado '
+                                                  '"Retenciones IIBB" con método de pago Withholding.<br/>') % wh_journal.name
+                                else:
+                                    msg += Markup('<span style="color:green;">&#9989;</span> '
+                                                  '<b>4. Diario OK:</b> %s<br/>') % wh_journal.name
+                            else:
+                                msg += Markup('<span style="color:red;">&#10060;</span> '
+                                              '<b>4. Crear diario de retenciones:</b> '
+                                              'No hay diario tipo Cash con método Withholding. '
+                                              'Crear uno en <i>Contabilidad → Configuración → Diarios</i> '
+                                              '→ tipo Efectivo → agregar método de pago "Withholding"<br/>')
+                        except Exception:
+                            msg += Markup('<span style="color:red;">&#10060;</span> '
+                                          '<b>4. Método Withholding no encontrado.</b> '
+                                          'Verificar que el módulo account_withholding esté instalado.<br/>')
+
+                        # Check 5: Provincia del partner
+                        if not partner.state_id or partner.state_id.id != 554:
+                            msg += Markup('<span style="color:orange;">&#9888;</span> '
+                                          '<b>5. Provincia:</b> el partner tiene "%s". '
+                                          'ARBA aplica para Buenos Aires. '
+                                          'Verificar en el contacto.<br/>') % (
+                                              partner.state_id.name or 'Sin provincia')
+                        else:
+                            msg += Markup('<span style="color:green;">&#9989;</span> '
+                                          '<b>5. Provincia OK:</b> Buenos Aires<br/>')
+
+                        msg += Markup('</div>')
+                        # Por qué: cerrar el div del tax (abierto en línea 160)
+                        # antes de saltar al siguiente impuesto
+                        msg += Markup('</div>')
+                        continue
+
                     msg += Markup('</div>')
 
                 except Exception as e:
@@ -304,6 +433,9 @@ class AccountPaymentGroup(models.Model):
                                   'ERROR en get_withholding_vals(): %s</span><br/>') % str(e)
 
                 # --- 3d: Verificar diario de retenciones ---
+                # Por qué: cuando retención = 0 el diario ya se evalúa
+                # en la checklist diagnóstica (continue arriba), acá solo
+                # llega si computed > 0
                 msg += Markup('<br/><u>Diario de retenciones:</u><br/>')
                 try:
                     payment_method = self.env.ref(
