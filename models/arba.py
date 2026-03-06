@@ -353,16 +353,15 @@ class ArchivoComprimido(models.Model):
             # Busco la tasa de percepción para este CUIT en el padrón
             var_cuit = (obj_contacto.vat or '').replace('-', '')
             tasa_perc = self.env['arba.padron'].search([('cuit', '=', var_cuit)], limit=1)
-            # Por qué: si el contacto no está en el padrón, usar tasa 0.0
-            # para asignarle la posición fiscal con IIBB ARBA 0% de ESTA empresa.
-            # Sin esto, el contacto queda sin posición fiscal y puede recibir
-            # un tax de otra empresa → error "Empresas incompatibles".
-            tasa = tasa_perc.tasa if tasa_perc else 0.0
+            # Por qué: si el contacto no está en el padrón, NO asignar posición fiscal ARBA.
+            # La S.H. no es agente de percepción → sus contactos deben seguir el flujo nativo de Odoo.
+            if not tasa_perc:
+                continue
             # Busco el impuesto filtrado por empresa actual
             # Por qué: sin company_id el search puede devolver un tax de otra empresa
             # → la posición fiscal resultante pertenece a esa otra empresa → conflicto multi-company
             id_imp = self.env['account.tax'].search([
-                ('amount', '=', tasa),
+                ('amount', '=', tasa_perc.tasa),
                 ('type_tax_use', '=', 'sale'),
                 ('company_id', '=', company.id),
             ], limit=1)

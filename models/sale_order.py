@@ -122,3 +122,25 @@ class SaleOrderLine(models.Model):
                 taxes_ok = line.tax_id.filtered(lambda t: t.company_id == line.company_id)
                 if taxes_ok != line.tax_id:
                     line.tax_id = taxes_ok
+
+    # --- Capa 3: filtro en _prepare_invoice_line ---
+    # Por qué: al crear factura desde pedido, _prepare_invoice_line pasa los
+    # tax_ids del SO line al account.move.line. Si hay taxes de otra empresa
+    # que sobrevivieron (ej: cargados manualmente), se filtran acá antes de
+    # que _check_company de account.move.line los rechace.
+
+    def _prepare_invoice_line(self, **optional_values):
+        vals = super()._prepare_invoice_line(**optional_values)
+        if vals.get('tax_ids') and self.company_id:
+            # tax_ids viene como [(6, 0, [ids])]
+            for i, cmd in enumerate(vals['tax_ids']):
+                if cmd[0] == 6 and cmd[2]:
+                    taxes = self.env['account.tax'].browse(cmd[2])
+                    ok = taxes.filtered(lambda t: t.company_id == self.company_id)
+                    if ok != taxes:
+                        _logger.info(
+                            "ARBA multi-company _prepare_invoice_line: descartados taxes %s",
+                            (taxes - ok).mapped('name'),
+                        )
+                        vals['tax_ids'][i] = (6, 0, ok.ids)
+        return vals
