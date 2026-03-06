@@ -58,6 +58,20 @@ class SaleOrderLine(models.Model):
         if 'tax_id' in vals and not self.env.context.get('_arba_no_reentry'):
             vals = dict(vals)  # Copia para no mutar el original
             self._limpiar_tax_commands(vals)
+            # Por qué: si después de limpiar, los taxes son los mismos que ya tiene
+            # la línea, eliminar tax_id de vals para evitar loop infinito.
+            # Una acción automatizada re-inyecta el tax malo → nuestro write lo saca
+            # → el write dispara la acción otra vez → loop.
+            # Si no hay cambio real en tax_id, no escribimos → no re-dispara.
+            if len(self) == 1 and vals.get('tax_id'):
+                for cmd in vals['tax_id']:
+                    if cmd[0] == 6:
+                        if set(cmd[2]) == set(self.tax_id.ids):
+                            del vals['tax_id']
+                        break
+            # Si vals quedó vacío, no hay nada que escribir
+            if not vals:
+                return True
         return super(SaleOrderLine, self.with_context(_arba_no_reentry=True)).write(vals)
 
     def _limpiar_tax_commands(self, vals):
