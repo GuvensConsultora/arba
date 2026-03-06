@@ -135,6 +135,16 @@ class SaleOrderLine(models.Model):
             if line.tax_id and line.company_id:
                 taxes_ok = line.tax_id.filtered(lambda t: t.company_id == line.company_id)
                 if taxes_ok != line.tax_id:
+                    # Log: diagnóstico de qué taxes se descartan y por qué
+                    descartados = line.tax_id - taxes_ok
+                    _logger.warning(
+                        "ARBA _compute_tax_id: línea %s (company %s/%s) — "
+                        "descartados: %s (companies: %s) — conservados: %s",
+                        line.id, line.company_id.id, line.company_id.name,
+                        descartados.mapped('name'),
+                        descartados.mapped(lambda t: (t.id, t.company_id.id, t.company_id.name)),
+                        taxes_ok.mapped('name'),
+                    )
                     line.tax_id = taxes_ok
 
     # --- Capa 3: filtro en _prepare_invoice_line ---
