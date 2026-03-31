@@ -9,6 +9,7 @@
         'base', 'web', 'mail', 'account', 'sale',
         'l10n_ar_percepciones', 'account_withholding_automatic',
         'l10n_ar_report_withholding', 'l10n_ar_report_payment_group',
+        'guvens_ret_gcias_iva',
     ],
     'data': [
         'security/ir.model.access.csv',
@@ -20,7 +21,6 @@
         'views/res_company_view.xml',
         'data/padron.xml',
         'data/mail_template_payment_group.xml',
-        'views/account_tax_view.xml',
         'report/report_withholding_certificate.xml',
         'report/report_payment_group.xml',
     ],

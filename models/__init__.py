@@ -2,6 +2,4 @@
 from . import arba
 from . import arba_ret_export
 from . import account_payment_group
-from . import account_payment
-from . import account_tax
 from . import sale_order
