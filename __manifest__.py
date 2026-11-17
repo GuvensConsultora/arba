@@ -1,6 +1,6 @@
 {
     'name': 'arba',
-    'version': '1.0',
+    'version': '1.1',
     'summary': 'Módulo scaffold base',
     'category': 'Tools',
     'author': 'Tu Nombre',

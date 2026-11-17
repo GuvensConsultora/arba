@@ -3,20 +3,21 @@
     <data>
 
         <!-- Override recibo Payment Group:
-             1. Título "RECIBO" → "ORDEN DE PAGO"
+             1. Título: "ORDEN DE PAGO"/"OP" sólo en pagos a proveedores;
+                los cobros a clientes quedan "RECIBO"/"REC" (pedido Lucas 17/11/2026)
              2. Tabla comprobantes con importe/abonado/saldo + totales -->
 
         <template id="report_payment_group_invoice_detail"
                   inherit_id="l10n_ar_report_payment_group.report_payment_group_document">
 
-            <!-- Cambiar card header "REC" → "OP" -->
+            <!-- Card header: "OP" a proveedores, "REC" a clientes -->
             <xpath expr="//div[hasclass('card-header')]" position="replace">
-                <div class="card-header" style="font-size: 48px;padding:0px;">OP</div>
+                <div class="card-header" style="font-size: 48px;padding:0px;"><t t-if="o.partner_type == 'supplier'">OP</t><t t-else="">REC</t></div>
             </xpath>
 
-            <!-- Cambiar título "RECIBO" → "ORDEN DE PAGO" -->
+            <!-- Título: "ORDEN DE PAGO" a proveedores, "RECIBO" a clientes -->
             <xpath expr="//h3[contains(text(),'RECIBO')]" position="replace">
-                <h3>ORDEN DE PAGO</h3>
+                <h3><t t-if="o.partner_type == 'supplier'">ORDEN DE PAGO</t><t t-else="">RECIBO</t></h3>
             </xpath>
 
             <!-- Reemplazar tabla comprobantes con columnas importe/abonado/saldo -->
